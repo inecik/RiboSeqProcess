@@ -2,6 +2,7 @@
 The script downloads and filters transcriptome data for Bowtie2 alignment tool.
 It filters out everything other than protein coding transcripts.
 Then, it runs indexing tool of Bowtie2.
+The output folder will be created to the directory where the script is called.
 """
 
 
@@ -76,16 +77,19 @@ with open(path_report_output, "w") as output_handle:
 # Run Bowtie2_build function in Bowtie2 module.
 print("Run Bowtie2_build function in Bowtie2 module.")
 n_core = cpu_count()  # Get the number of cores of the system for multiprocessing
-bowtie2_index = os.path.join(data_repository, "bowtie_index")
+bowtie2_index = os.path.join(data_repository, "bowtie2_index")
 if not os.access(bowtie2_index, os.W_OK) or not os.path.isdir(bowtie2_index): # Create directory if not exist
     os.mkdir(bowtie2_index)
 subprocess.run((
-    f"cd {bowtie2_index};"    # Change the directory to the index directory
+    f"cd {bowtie2_index};"  # Change the directory to the index directory
     "bowtie2-build "  # Name of the function
-    f"--threads {n_core} "  # Number of threads to be used
+    f"--threads {n_core} "  # Number of threads to be used. todo:it might be incorrect
     f"{path_fasta_output} "  # Input file. -f is to indicate the file is in fasta format
-    f"{datetime.now().strftime('%Y.%m.%d_%H.%M.%S')}"  # The basename of the index files to write
+    f"homo_sapiens_protein_coding_transcriptome"  # The basename of the index files to write
 ), shell=True)
+
+
+# Possible update: Instead of bowtie2-build, I can use shutil.which()
 
 
 #End of the script
