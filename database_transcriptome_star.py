@@ -1,6 +1,9 @@
 """
 The script downloads and filters transcriptome data.
 It prepares the database for alignment tools.
+It keeps transcripts if they are the longest isoform and if they are protein coding
+It filters above in fasta file. 
+Then checks corresponding GTF file and filter outs the same transcripts based on transcript id. 
 """
 
 
@@ -25,7 +28,7 @@ __status__ = "Development"
 running_directory = os.getcwd() 
 data_repository = "data"  # name of the database containing folder
 data_repo_dir = os.path.join(running_directory, data_repository)
-if not os.access(running_directory, os.W_OK) or not os.path.isdir(data_repo_dir): # Create directory if not exist
+if not os.access(data_repo_dir, os.W_OK) or not os.path.isdir(data_repo_dir): # Create directory if not exist
     print("Data directory created")
     os.mkdir(data_repo_dir)
 
