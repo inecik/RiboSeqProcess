@@ -45,9 +45,9 @@ rRNA_depleted_fasta_read2 = sys.argv[2]  # Accept as the second command line arg
 bowtie2_run = subprocess.run((
     f"cd {data_repo_dir};"  # Change the directory to the index directory
     f"{which('bowtie2')} "  # Run Bowtie2 module
-    "-D20 -R3"  # Increases sensitivity 
-    "-I35 -X85 "  # Search only those that has 35-85 nt. Makes Bowtie2 slower. 
-    # Todo: Increase 85 to 100 and decrease 35 to 20. Rerun everthing and check the footprints
+    "-D30 -R5"  # Increases sensitivity. It is now very high.
+    "-I30 -X240 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
+    # todo: Possible improvement: '--no-unal', to suppress the non-aligned reads
     "-q "  # Specifies the inputs are in fastq format 
     f"-p{cpu_count()} "  # Number of core to use
     "--no-discordant "  # Filter pairs does not obey orientation/length constraints 
