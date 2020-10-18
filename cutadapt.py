@@ -2,7 +2,9 @@
 Cutadapt for paired end sequencing, runs for both reads
 """
 
+
 import os
+import sys
 import subprocess
 from multiprocessing import cpu_count
 from shutil import which
@@ -29,7 +31,7 @@ adapters = [adapter_seq_read_1, adapter_seq_read_2]
 
 # Create and set working directory
 julia_script_dir = os.path.join(os.path.dirname(__file__), JULIA_NAME)  # Julia script should be next to this script.
-output_dir_module = os.path.join(output_dir, DATA_REPO)
+output_dir_module = os.path.join(output_dir, OUTPUT_DATA_REPO)
 if not os.access(output_dir_module, os.W_OK) or not os.path.isdir(output_dir_module):  # Create directory if not exist
     os.mkdir(output_dir_module)
 os.chdir(output_dir_module)  # Since everything will be output there
@@ -42,7 +44,7 @@ os.chdir(output_dir_module)  # Since everything will be output there
 # Cutadapt run for adapter trimming
 temp_paths = list()
 for read_adapter, read_path, read_name in zip(adapters, read_paths, NAMES):  # Run for each read.
-    if adapter:  # If adapter is defined for a given read. If none, skip it.
+    if read_adapter:  # If adapter is defined for a given read. If none, skip it.
         output_for_given_read = f"-o {read_name}_cutadapt_temp.fastq.gz "
         subprocess.run((
             f"{which('cutadapt')} "  # Define which cutadapt installation to use

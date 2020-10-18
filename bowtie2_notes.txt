@@ -17,3 +17,7 @@ sam processing'de flag'lara bakarak allign olmamış readleri filtrele başta
 
 
 
+-----------------------------------------------------------------
+
+
+
