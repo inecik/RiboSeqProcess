@@ -1,6 +1,6 @@
 """
-The script downloads and filters transcriptome data for Bowtie2 alignment tool.
-It filters out everything other than protein coding transcripts.
+The script downloads and filters non-coding RNA data for Bowtie2 alignment tool.
+It filters out everything other than rRNA, tRNA
 Then, it runs indexing tool of Bowtie2.
 The output folder will be created to the directory where the script is called.
 """
@@ -26,23 +26,24 @@ __status__ = "Development"
 
 
 # CONSTANTS
-DATA_REPO = "bowtie2_transcriptome"  # name of the database containing folder
-DATABASE_FASTA = "Homo_sapiens.GRCh38.cdna.all.fa.gz"  # Name of fasta file in the ftp server
-INDEX_BASE = "homo_sapiens_protein_coding_transcriptome"  # The basename of the index files to write
+DATA_REPO = "bowtie2_rrna-trna"  # name of the database containing folder
+DATABASE_FASTA = "Homo_sapiens.GRCh38.ncrna.fa.gz"  # Name of fasta file in the ftp server
+INDEX_BASE = "homo_sapiens_rrna-trna"  # The basename of the index files to write
+
 
 # Operations for working environment
-running_directory = os.getcwd() 
+running_directory = os.getcwd()
 data_repo_dir = os.path.join(running_directory, DATA_REPO)
 if not os.access(data_repo_dir, os.W_OK) or not os.path.isdir(data_repo_dir):  # Create directory if not exist
     os.mkdir(data_repo_dir)
 
 
-# Download the transcriptome data and file name related operations
+# Download the non-coding-RNA data and file name related operations
 # Release-96 (GRCh38.p12) is used to be compatible with Mati and Kai's previous works
 subprocess.run((
     f"cd {data_repo_dir};"  # Change the directory to the downloading directory
     "curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/"  # Curl FTP fetch
-    f"fasta/homo_sapiens/cdna/{DATABASE_FASTA}"  # .. remaining of the URL
+    f"fasta/homo_sapiens/ncrna/{DATABASE_FASTA}"  # .. remaining of the URL
 ), shell=True)
 path_fasta = os.path.join(data_repo_dir, DATABASE_FASTA)  # Find out the paths
 path_fasta_output = re.search(r"(.*)\.fa\.gz$", path_fasta).group(1) + "_filtered.fa"
@@ -56,9 +57,10 @@ with gzip.open(path_fasta, "rt") as handle:  # Open the gz file
     with open(path_fasta_output, "wt") as output_handle:  # Open a file for output
         for record in SeqIO.parse(handle, "fasta"):  # Read the fasta record by a function in Biopython package
             counter_total_fasta += 1
-            # Keep only if the transcript is protein coding.
+            gbt = re.search(r"\sgene_biotype:(.*?)\s", record.description)
+            if gbt and gbt.group(1) in ['Mt_tRNA', 'Mt_rRNA', 'rRNA', 'tRNA']:
+            # Keep only if the transcripts specified above.
             # Check: https://www.ensembl.org/info/genome/genebuild/biotypes.html
-            if re.search(r"\sgene_biotype:protein_coding\s", record.description):
                 SeqIO.write(record, output_handle, "fasta")
                 counter_filtered_fasta += 1
 
