@@ -5,6 +5,7 @@ Star alignment for paired end sequencing.
 
 
 import os
+import re
 import sys
 import subprocess
 from multiprocessing import cpu_count
@@ -41,15 +42,15 @@ db_nm_fa = "Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
 fb_nm_gtf = "Homo_sapiens.GRCh38.96.gtf.gz"
 subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/{db_nm_fa}", shell=True)
 subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/gtf/homo_sapiens/{fb_nm_gtf}", shell=True)
-subprocess.run(f"gzip {db_nm_fa}", shell=True)  # Uncompress gz file
-subprocess.run(f"gzip {fb_nm_gtf}", shell=True)  # Uncompress gz file
+subprocess.run(f"gzip -d {db_nm_fa}", shell=True)  # Uncompress gz file
+subprocess.run(f"gzip -d {fb_nm_gtf}", shell=True)  # Uncompress gz file
 db_nm_fa_uncmprsd = re.search(r"(.*)\.fa\.gz$", db_nm_fa).group(1) + ".fa"
 fb_nm_gtf_uncmprsd = re.search(r"(.*)\.gtf\.gz$", fb_nm_gtf).group(1) + ".gtf"
 
 
 # Genome index creation
 subprocess.run((
-    f"{which('star')} "  # Define which star installation to use
+    f"{which('STAR')} "  # Define which star installation to use
     f"--runThreadN {cpu_count()} "  # Define how many core to be used. All cores are now using
     "--runMode genomeGenerate " 
     f"--genomeDir {genome_index_dir} "  # Directory to save the files 
