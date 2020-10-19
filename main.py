@@ -36,7 +36,7 @@ if not os.access(temp_dir, os.W_OK) or not os.path.isdir(temp_dir):  # Create di
     os.mkdir(temp_dir)
 
 
-# Run Cutadapt module
+# Run Cutadapt module
 subprocess.run((
     f"{which('python3')} "  # Define which python installation to use
     "cutadapt.py "  # The script is at the same directory with the main.py

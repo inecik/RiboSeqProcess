@@ -135,9 +135,6 @@ dmypy.json
 **/.DS_Store
 
 # data folder
-data/*
-bowtie2_transcriptome/*
-bowtie2_rrna-trna/*
-bowtie2_prealignment/*
-bowtie2_prealignment_*/*
-bowtie2_rnaremove/*
+OUTPUT/*
+TEMP/*
+FIGURES/*
