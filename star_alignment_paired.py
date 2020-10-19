@@ -25,16 +25,6 @@ output_dir = sys.argv[3]  # Command line input 3 for the directory for output fi
 temp_dir = sys.argv[4]  # Command line input 4 for the directory for temp files, as described in main.py
 
 
-# Download necessary genome files from the server
-# Release-96 (GRCh38.p12) is used to be compatible with Mati and Kai's previous works
-db_nm_fa = "Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
-fb_nm_gtf = "Homo_sapiens.GRCh38.96.gtf.gz"
-subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/{db_nm_fa}", shell=True)
-subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/gtf/homo_sapiens/{fb_nm_gtf}", shell=True)
-subprocess.run(f"gzip -d {db_nm_fa}", shell=True)  # Uncompress gz file
-subprocess.run(f"gzip -d {fb_nm_gtf}", shell=True)  # Uncompress gz file
-
-
 # Create and set working directory for genome index creation
 temp_dir_module = os.path.join(temp_dir, TEMP_DATA_REPO)
 if not os.access(temp_dir_module, os.W_OK) or not os.path.isdir(temp_dir_module):  # Create directory if not exist
@@ -45,14 +35,26 @@ if not os.access(genome_index_dir, os.W_OK) or not os.path.isdir(genome_index_di
     os.mkdir(genome_index_dir)  # For genome index files
 
 
+# Download necessary genome files from the server
+# Release-96 (GRCh38.p12) is used to be compatible with Mati and Kai's previous works
+db_nm_fa = "Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
+fb_nm_gtf = "Homo_sapiens.GRCh38.96.gtf.gz"
+subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/{db_nm_fa}", shell=True)
+subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/gtf/homo_sapiens/{fb_nm_gtf}", shell=True)
+subprocess.run(f"gzip {db_nm_fa}", shell=True)  # Uncompress gz file
+subprocess.run(f"gzip {fb_nm_gtf}", shell=True)  # Uncompress gz file
+db_nm_fa_uncmprsd = re.search(r"(.*)\.fa\.gz$", db_nm_fa).group(1) + ".fa"
+fb_nm_gtf_uncmprsd = re.search(r"(.*)\.gtf\.gz$", fb_nm_gtf).group(1) + ".gtf"
+
+
 # Genome index creation
 subprocess.run((
     f"{which('star')} "  # Define which star installation to use
     f"--runThreadN {cpu_count()} "  # Define how many core to be used. All cores are now using
     "--runMode genomeGenerate " 
     f"--genomeDir {genome_index_dir} "  # Directory to save the files 
-    f"--genomeFastaFiles {db_nm_fa} "  # Specifies FASTA file with the genome reference sequences
-    f"--sjdbGTFfile {fb_nm_gtf} "  # Specifies the file with annotated transcripts in the standard GTF format
+    f"--genomeFastaFiles {db_nm_fa_uncmprsd} "  # Specifies FASTA file with the genome reference sequences
+    f"--sjdbGTFfile {fb_nm_gtf_uncmprsd} "  # Specifies the file with annotated transcripts in the standard GTF format
     f"--sjdbOverhang {ReadLength_minus_1}"  # Specifies the length of the genomic sequence around the annotated junction
 ), shell=True)
 
