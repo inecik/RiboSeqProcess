@@ -25,39 +25,39 @@ __status__ = "Development"
 
 
 # CONSTANTS
-DATA_REPO = "bowtie2_rnaremove"  # Name of the database containing folder
+OUTPUT_DATA_REPO = "bowtie2_rnaremove"  # Name of the database containing folder
 INDEX_DIR = "bowtie2_rrna-trna/bowtie2_index/"  # Check database_transcriptome_bowtie2.py
-INDEX_BASE = "homo_sapiens_rrna-trna"  # Check database_rnaremove_bowtie2.py
-OUTPUT_FASTQ = "norRNA"
+INDEX_BASE = "sapiens-coli_rrna-trna"  # Check database_rnaremove_bowtie2.py
+OUTPUT_FASTQ = "norRNA.fastq"
 REPORT_FILE = "report_rnaremove.txt"
 
 
 # Operations for working environment and file name related operations
-running_directory = os.getcwd()
-data_repo_dir = os.path.join(running_directory, DATA_REPO)
+to_rRNA_depleted_fasta_read1 = sys.argv[1]  # Accept as the first command line argument
+to_rRNA_depleted_fasta_read2 = sys.argv[2]  # Accept as the second command line argument
+output_dir = sys.argv[3]
+temp_dir = sys.argv[4]
+
+data_repo_dir = os.path.join(output_dir, OUTPUT_DATA_REPO)
 if not os.access(data_repo_dir, os.W_OK) or not os.path.isdir(data_repo_dir):  # Create directory if not exist
     os.mkdir(data_repo_dir)
-output_path = os.path.join(data_repo_dir, OUTPUT_FASTQ)
-output_report_path = os.path.join(data_repo_dir, REPORT_FILE)
-index_files = os.path.join(running_directory, INDEX_DIR, INDEX_BASE)
-rRNA_depleted_fasta_read1 = sys.argv[1]  # Accept as the first command line argument
-rRNA_depleted_fasta_read2 = sys.argv[2]  # Accept as the second command line argument
 
+index_files = os.path.join(temp_dir, INDEX_DIR, INDEX_BASE)
+output_report_path = os.path.join(data_repo_dir, REPORT_FILE)
+output_path = os.path.join(data_repo_dir, OUTPUT_FASTQ)
 
 bowtie2_run = subprocess.run((
     f"cd {data_repo_dir};"  # Change the directory to the index directory
     f"{which('bowtie2')} "  # Run Bowtie2 module
-    # todo: Possible improvement "-D30 -R5" as in other bowtie2 script
-    "-I40 -X90 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
-    # todo: Possible improvement: '--no-unal', to suppress the non-aligned reads
-    # todo: Possible improvement "-q " as in other bowtie2 script
     f"-p{cpu_count()} "  # Number of core to use
+    "-D30 -R5 -L13 " # D and R added by me. L is from the manuscript.
+    "-q "  # Indicates the inputs are fastq
     "--no-mixed "  # Do not search for individual pairs if one in a pair does not align.
     "--time "  # Print the wall-clock time required to load the index files and align the reads. 
     f"-x {index_files} "  # Index directory with the base name
-    f"-1 {rRNA_depleted_fasta_read1} "  # Read 1
-    f"-2 {rRNA_depleted_fasta_read2} "  # Read 2
-    f"--un-conc {output_path}.fastq "  # Output fastq file, Contains all reads which did not aligned RNAs.
+    f"-1 {to_rRNA_depleted_fasta_read1} "  # Read 1
+    f"-2 {to_rRNA_depleted_fasta_read2} "  # Read 2
+    f"--un-conc {output_path} "  # Output fastq file, Contains all reads which did not aligned RNAs.
     "-S /dev/null "  # Discard alignment sam file
     f"2> {output_report_path}"
 ), shell=True)

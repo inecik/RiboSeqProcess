@@ -16,38 +16,81 @@ import shutil
 import multiprocessing
 
 
+# Authorship information
+__author__ = "Kemal İnecik"
+__license__ = "GPLv3"
+__version__ = "0.1"
+__maintainer__ = "Kemal İnecik"
+__email__ = "k.inecik@gmail.com"
+__status__ = "Development"
+
+
 # CONSTANTS
-DATA_REPO = "output"  # Output files like sam or fasta
-TEMP_REPO = "temp"  # Created files to make scripts work like indexes.
+OUTP_MAIN = "OUTPUT"  # Output files like sam or fasta
+TEMP_MAIN = "TEMP"  # Created files to make scripts work like indexes.
+FIGU_MAIN = "FIGURES"
 
 
 # Inputs
-read_1 = sys.argv[1]  # Command line input 1 for read 1
-read_2 = sys.argv[2]  # Command line input 2 for read 2
+raw_inputs = {'read_1': sys.argv[1], 'read_2': sys.argv[2]}  # Command line inputs for the reads
 
 
-# Create and set working directory
-running_directory = os.getcwd() 
-output_dir = os.path.join(running_directory, DATA_REPO)
+# Obtain the root dir names for scripts to run properly
+running_directory = os.getcwd()  # Where this script is called
+scripts_directory = os.path.dirname(__file__)  # Where this package is
+
+
+# Create directories to work on
+output_dir = os.path.join(running_directory, OUTP_MAIN)
 if not os.access(output_dir, os.W_OK) or not os.path.isdir(output_dir):  # Create directory if not exist
     os.mkdir(output_dir)
-temp_dir = os.path.join(running_directory, TEMP_REPO)
-if not os.access(temp_dir, os.W_OK) or not os.path.isdir(temp_dir):  # Create directory if not exist
-    os.mkdir(temp_dir)
+
+tempor_dir = os.path.join(running_directory, TEMP_MAIN)
+if not os.access(tempor_dir, os.W_OK) or not os.path.isdir(tempor_dir):  # Create directory if not exist
+    os.mkdir(tempor_dir)
+
+figure_dir = os.path.join(running_directory, FIGU_MAIN)
+if not os.access(figure_dir, os.W_OK) or not os.path.isdir(figure_dir):  # Create directory if not exist
+    os.mkdir(figure_dir)
 
 
-# Run Cutadapt module
+# ____________________________________________________________
+# Cutadapt Module
+# ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+
+
 subprocess.run((
     f"{which('python3')} "  # Define which python installation to use
-    "cutadapt.py "  # The script is at the same directory with the main.py
-    f"{read_1} "  # sys.argv[1]
-    f"{read_2} "  # sys.argv[2]
+    f"{os.path.join(scripts_directory, "module_cutadapt/cutadapt.py")} "  # Script directory relative to main.py
+    f"{raw_inputs['read_1']} "  # sys.argv[1] 
+    f"{raw_inputs['read_2']} "  # sys.argv[2]
     f"{output_dir}"  # sys.argv[3]
 ), shell=True)
 
 
-# Run rrna_removal.py
+# ____________________________________________________________ 
+# RNA Remove Module
+# ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 
+rna_remove_inputs = {'read_1': "read1_cutadapt.fastq.gz", 'read_2': "read2_cutadapt_umi_aware.fastq.gz"}
+
+# Genome indexes
+subprocess.run((  # todo: check if exist, run otherwise
+    f"{which('python3')} "  # Define which python installation to use
+    f"{os.path.join(scripts_directory, "module_rnaremove/database_rnaremove_bowtie2.py")} "  # Script directory relative to main.py
+    f"{TEMP_MAIN} "  # sys.argv[1] 
+), shell=True)
+
+# Alignment
+
+#### todo INCOMPLETE HERE
+subprocess.run((
+    f"{which('python3')} "  # Define which python installation to use
+    f"{os.path.join(scripts_directory, "module_rnaremove/bowtie2_rnaremove.py")} "  # Script directory relative to main.py
+    f"{rna_remove_inputs['read_1']} "  # sys.argv[1] 
+    f"{rna_remove_inputs['read_2']} "  # sys.argv[2]
+    f"{output_dir}"  # sys.argv[3]
+), shell=True)
 
 # Run link_reads.py
 
@@ -55,3 +98,4 @@ subprocess.run((
 # Run star_alignment.py
 
 
+# Run assignment

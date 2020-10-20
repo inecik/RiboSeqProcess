@@ -30,11 +30,10 @@ temp_dir = sys.argv[4]  # Command line input 4 for the directory for temp files,
 temp_dir_module = os.path.join(temp_dir, TEMP_DATA_REPO)
 if not os.access(temp_dir_module, os.W_OK) or not os.path.isdir(temp_dir_module):  # Create directory if not exist
     os.mkdir(temp_dir_module)
-os.chdir(temp_dir_module)  # Since everything will be output there for a while
 genome_index_dir = os.path.join(temp_dir_module, GENOME_INDEX_DIR_NAME)
 if not os.access(genome_index_dir, os.W_OK) or not os.path.isdir(genome_index_dir):  # Create directory if not exist
     os.mkdir(genome_index_dir)  # For genome index files
-
+os.chdir(temp_dir_module)  # Since everything will be output there for a while
 
 # Download necessary genome files from the server
 # Release-96 (GRCh38.p12) is used to be compatible with Mati and Kai's previous works
