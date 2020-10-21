@@ -56,6 +56,13 @@ with pysam.AlignmentFile(sam_path, "r") as sam_handle:  # Open sam file
                 # Get the entry reference name and fetch the associated sequence from transcriptome dictionary
                 # Substring the reference by ranges [from Start to Start + Inferred length]
                 fp = transcript_seqs[e.reference_name][e.reference_start: e.reference_start + e.template_length]
+
+                # todo: copy and paste 5' and 3' end instead of taking directly from the reference genome
+                # e.template_length > 0 ve e.template_length < 0 ile iki çifti al
+                # UMI'lerden arındırarak bunları mate ilan et,
+
+                # reverse transcriptase'ın verdiği rastgele şeyleri alıyor. şu andaki footprinter
+
                 output_handle.write(f">{e.query_name}\n{fp}\n")  # Write down the identifier and sequence to fasta file
 
 
