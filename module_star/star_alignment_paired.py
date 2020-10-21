@@ -9,6 +9,7 @@ import re
 import sys
 import subprocess
 from multiprocessing import cpu_count
+from datetime import datetime
 from shutil import which
 
 
@@ -39,24 +40,24 @@ os.chdir(temp_dir_module)  # Since everything will be output there for a while
 # Release-96 (GRCh38.p12) is used to be compatible with Mati and Kai's previous works
 db_nm_fa = "Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
 fb_nm_gtf = "Homo_sapiens.GRCh38.96.gtf.gz"
-subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/{db_nm_fa}", shell=True)
-subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/gtf/homo_sapiens/{fb_nm_gtf}", shell=True)
-subprocess.run(f"gzip -d {db_nm_fa}", shell=True)  # Uncompress gz file
-subprocess.run(f"gzip -d {fb_nm_gtf}", shell=True)  # Uncompress gz file
+#subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/{db_nm_fa}", shell=True)
+#subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/gtf/homo_sapiens/{fb_nm_gtf}", shell=True)
+#subprocess.run(f"gzip -d {db_nm_fa}", shell=True)  # Uncompress gz file
+#subprocess.run(f"gzip -d {fb_nm_gtf}", shell=True)  # Uncompress gz file
+# todo: gzip: Homo_sapiens.GRCh38.dna.primary_assembly.fa already exists
 db_nm_fa_uncmprsd = re.search(r"(.*)\.fa\.gz$", db_nm_fa).group(1) + ".fa"
 fb_nm_gtf_uncmprsd = re.search(r"(.*)\.gtf\.gz$", fb_nm_gtf).group(1) + ".gtf"
 
-
 # Genome index creation
-subprocess.run((
-    f"{which('STAR')} "  # Define which star installation to use
-    f"--runThreadN {cpu_count()} "  # Define how many core to be used. All cores are now using
-    "--runMode genomeGenerate " 
-    f"--genomeDir {genome_index_dir} "  # Directory to save the files 
-    f"--genomeFastaFiles {db_nm_fa_uncmprsd} "  # Specifies FASTA file with the genome reference sequences
-    f"--sjdbGTFfile {fb_nm_gtf_uncmprsd} "  # Specifies the file with annotated transcripts in the standard GTF format
-    f"--sjdbOverhang {ReadLength_minus_1}"  # Specifies the length of the genomic sequence around the annotated junction
-), shell=True)
+#subprocess.run((
+#    f"{which('STAR')} "  # Define which star installation to use
+#    f"--runThreadN {cpu_count()} "  # Define how many core to be used. All cores are now using
+#    "--runMode genomeGenerate "
+#    f"--genomeDir {genome_index_dir} "  # Directory to save the files
+#    f"--genomeFastaFiles {db_nm_fa_uncmprsd} "  # Specifies FASTA file with the genome reference sequences
+#    f"--sjdbGTFfile {fb_nm_gtf_uncmprsd} "  # Specifies the file with annotated transcripts in the standard GTF format
+#    f"--sjdbOverhang {ReadLength_minus_1}"  # Specifies the length of the genomic sequence around the annotated junction
+#), shell=True)
 
 
 # Create and set working directory for alignment
@@ -68,7 +69,7 @@ os.chdir(output_dir_module)  # Since everything will be output there
 
 # Actual alignment for paired end sequencing
 subprocess.run((
-    f"{which('star')} "  # Define which star installation to use
+    f"{which('STAR')} "  # Define which star installation to use
     f"--runThreadN {cpu_count()} "  # Define how many core to be used. All cores are now using
     f"--genomeDir {genome_index_dir} "  # Directory for genome index which has been just created
     f"--readFilesIn {read_1} {read_2} "
@@ -78,7 +79,7 @@ subprocess.run((
     "--peOverlapMMp 0.1 "
     "--outFilterType BySJout "
     "--alignIntronMin 5 "
-    f"--outFileNamePrefix {output_dir_module} "
+    f"--outFileNamePrefix {os.path.join(output_dir_module, 'paired' + datetime.now().strftime('_%Y.%m.%d-%H.%M.%S_'))} "
     "--outReadsUnmapped Fastx "
     "--outSAMtype BAM SortedByCoordinate "
     "--outSAMattributes All XS "
@@ -86,5 +87,8 @@ subprocess.run((
     "--twopassMode Basic"
 ), shell=True)
 
+
+# todo: output folders should be the same as the fasta/fastq name.
+# todo: bam to sam 'samtools view -h -o out.sam in.bam'
 
 # End of the script
