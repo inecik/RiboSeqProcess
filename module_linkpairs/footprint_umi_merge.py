@@ -29,11 +29,11 @@ OUTPUT_FILE = "footprints_UMI.fasta"
 
 
 # Operations for working environment and file name related operations
-running_directory = os.getcwd()
-data_repo_dir = os.path.join(running_directory, DATA_REPO)
-input_path = os.path.join(data_repo_dir, FASTA_FILE)
-output_path = os.path.join(data_repo_dir, OUTPUT_FILE)
-read_with_umi = sys.argv[1]  # Important: Only FastQ. Accept as the second command line argument
+read_with_umi = sys.argv[1]  # Important: Only FastQ, which contains UMI info in the title
+output_dir = sys.argv[2]
+output_module_dir = os.path.join(output_dir, DATA_REPO)
+input_path = os.path.join(output_module_dir, FASTA_FILE)
+output_path = os.path.join(output_module_dir, OUTPUT_FILE)
 
 
 # Check the UMI containing fastq file. Warning: Consumes a lot of memory; 1.5 times of the read file roughly

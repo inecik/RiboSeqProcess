@@ -31,27 +31,28 @@ INDEX_BASE = "homo_sapiens_protein_coding_transcriptome"  # Check database_trans
 
 
 # Operations for working environment and file name related operations
-running_directory = os.getcwd()
-data_repo_dir = os.path.join(running_directory, DATA_REPO)
-if not os.access(data_repo_dir, os.W_OK) or not os.path.isdir(data_repo_dir):  # Create directory if not exist
-    os.mkdir(data_repo_dir)
-output_path = os.path.join(data_repo_dir, SAM_FILE)
-index_files = os.path.join(running_directory, INDEX_DIR, INDEX_BASE)
 rRNA_depleted_fasta_read1 = sys.argv[1]  # Accept as the first command line argument
 rRNA_depleted_fasta_read2 = sys.argv[2]  # Accept as the second command line argument
+output_dir = sys.argv[3]
+temp_dir = sys.argv[4]
+output_module_dir = os.path.join(output_dir, DATA_REPO)
+if not os.access(output_module_dir, os.W_OK) or not os.path.isdir(output_module_dir):  # Create directory if not exist
+    os.mkdir(output_module_dir)
+output_path = os.path.join(output_module_dir, SAM_FILE)
+index_files = os.path.join(temp_dir, INDEX_DIR, INDEX_BASE)
 
 
 bowtie2_run = subprocess.run((
-    f"cd {data_repo_dir};"  # Change the directory to the index directory
+    f"cd {output_module_dir};"  # Change the directory to the index directory
     f"{which('bowtie2')} "  # Run Bowtie2 module
-    "-D30 -R5"  # Increases sensitivity. It is now very high.
-    "-I30 -X240 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
-    # todo: Possible improvement: '--no-unal', to suppress the non-aligned reads
+    "-D150 -R20 "  # Alignment effort. It is now extremely high.
+    "-I30 -X100 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
+    "--no-unal "  # To suppress the non-aligned reads
     "-q "  # Specifies the inputs are in fastq format 
     f"-p{cpu_count()} "  # Number of core to use
     "--no-discordant "  # Filter pairs does not obey orientation/length constraints 
     "--no-mixed "  # Do not search for individual pairs if one in a pair does not align.
-    "--end-to-end "  # Indicate the alignment is end to end. No soft clipping will be applied.
+    "--local "  # Indicate the alignment is local. Soft clipping will be applied.
     "--time "  # Print the wall-clock time required to load the index files and align the reads. 
     f"-x {index_files} "  # Index directory with the base name
     f"-1 {rRNA_depleted_fasta_read1} "  # Read 1

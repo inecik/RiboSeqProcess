@@ -21,9 +21,9 @@ ReadLength_minus_1 = 100  # Manual says: In most cases, the default value of 100
 
 
 # Inputs
-read_file = sys.argv[1]  # Command line input 1 for read 1. Assuming it is fastq.gz
-output_dir = sys.argv[2]  # Command line input 3 for the directory for output files, as described in main.py
-temp_dir = sys.argv[3]  # Command line input 4 for the directory for temp files, as described in main.py
+read_file = sys.argv[1]  # For read 1
+output_dir = sys.argv[2]  # For the directory for output files, as described in main.py
+temp_dir = sys.argv[3]  # For the directory for temp files, as described in main.py
 
 
 # Create and set working directory for genome index creation
@@ -79,7 +79,7 @@ subprocess.run((
     # "--peOverlapMMp 0.1 " It is for paired end sequencing
     "--outFilterType BySJout "
     "--alignIntronMin 5 "
-    f"--outFileNamePrefix {os.path.join(output_dir_module, 'single_' + datetime.now().strftime('-%Y.%m.%d-%H.%M.%S'))} "
+    f"--outFileNamePrefix {os.path.join(output_dir_module, 'single' + datetime.now().strftime('_%Y.%m.%d-%H.%M.%S_'))} "
     "--outReadsUnmapped Fastx "
     "--outSAMtype BAM SortedByCoordinate "
     "--outSAMattributes All XS "
