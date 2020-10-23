@@ -45,8 +45,8 @@ index_files = os.path.join(temp_dir, INDEX_DIR, INDEX_BASE)
 bowtie2_run = subprocess.run((
     f"cd {output_module_dir};"  # Change the directory to the index directory
     f"{which('bowtie2')} "  # Run Bowtie2 module
-    "-D150 -R20 "  # Alignment effort. It is now extremely high.
-    "-I30 -X100 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
+    "-D 40 -R 6 -N 0 -L 20 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
+    "-I30 -X150 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
     "--no-unal "  # To suppress the non-aligned reads
     "-q "  # Specifies the inputs are in fastq format 
     f"-p{cpu_count()} "  # Number of core to use

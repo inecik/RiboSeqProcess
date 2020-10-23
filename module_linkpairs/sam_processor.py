@@ -38,8 +38,6 @@ sam_path = os.path.join(data_repo_dir, SAM_FILE)
 fasta_transcriptome = os.path.join(temp_dir, TRANSC_FASTA)
 output_fasta = os.path.join(data_repo_dir, OUTPUT_NAME)
 
-fasta_transcriptome = "/Users/kemalinecik/Desktop/Homo_sapiens.GRCh38.cdna.all_filtered.fa"
-sam_path = "/Users/kemalinecik/Desktop/bowtie2_prealignment.sam"
 
 # Take the transcript sequences into random access memory
 print("Take the transcript sequences into random access memory")
