@@ -88,7 +88,4 @@ subprocess.run((
 ), shell=True)
 
 
-# todo: output folders should be the same as the fasta/fastq name.
-# todo: bam to sam 'samtools view -h -o out.sam in.bam'
-
 # End of the script

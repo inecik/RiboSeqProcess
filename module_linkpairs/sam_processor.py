@@ -83,9 +83,4 @@ with open(output_fasta, "w") as output_handle:  # Open output fasta file
                     output_handle.write(f">{e.query_name}\n{fp}\n")
 
 
-# # Tlen is very reliable so I renewed the checked by looking the sequences
-# Sam processor is renewed by thinking about cigar, soft trimming
-
-# Umi bring script gave the same result? Is it an error
-
 # End of the script

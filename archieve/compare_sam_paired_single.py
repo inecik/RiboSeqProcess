@@ -3,10 +3,12 @@ This script is to compare the results of two bam files on STAR.
 It is to test the link pairing module's success.
 """
 
+
 import sys
 import re
 import pysam
 from pyensembl import EnsemblRelease  #pyensembl install --release 96 --species human
+
 
 # Authorship information
 __author__ = "Kemal İnecik"
@@ -170,27 +172,27 @@ for iteration, qn in enumerate(aligned_single): # Iterate through the single end
         progressBarForTerminal(iteration, len(aligned_single) - 1)
 
 
-print(f"{'_'* 10}\nREPORT\n{'‾'*10}\n")
+print("\n")
 
-print(f"* Number of entries in single-end sequencing sam: {counter}")
-print(f"* Number of entries in paired-end sequencing sam: {reporter} ({int(reporter / 2)} pairs)")
+print(f"Number of entries in single-end sequencing sam: {counter}")
+print(f"Number of entries in paired-end sequencing sam: {reporter} ({int(reporter / 2)} pairs)")
 print()
 
-print(f"* {counter_not_proper_pair} / {reporter} entries in paired-end sam were not in 'proper-pair' or not aligned properly.")
-print(f"* {len(aligned_paired_insingle)} / {int(reporter / 2)} pairs were in single-end seq sam.")
-print(f"* {int((counter_protein_coding_notinsingle + counter_noncoding_notinsingle)/2)} / {int(reporter / 2)} pairs were exclusively found in paired-end sam.")
+print(f"{counter_not_proper_pair} / {reporter} entries in paired-end sam were not in 'proper-pair' or not aligned properly.")
+print(f"{len(aligned_paired_insingle)} / {int(reporter / 2)} pairs were in single-end seq sam.")
+print(f"{int((counter_protein_coding_notinsingle + counter_noncoding_notinsingle)/2)} / {int(reporter / 2)} pairs were exclusively found in paired-end sam.")
 print(f"\t- Among those, {int(counter_protein_coding_notinsingle/2)} pairs were protein coding.")
 print(f"\t- Among those, {int(counter_noncoding_notinsingle/2)} pairs were not protein coding.")
 print()
 
 
-print(f"* {counter_verified_start_position} / {counter} (%{round(counter_verified_start_position / counter * 100, 2)}) single-end entry has the same start position with one of the pairs (Verified)")
-print(f"* {len(aligned_single) - len(aligned_paired_insingle)} (%{round((len(aligned_single) - len(aligned_paired_insingle)) / counter * 100, 2)}) reads were found exclusively in single-sam but not paired.")
+print(f"{counter_verified_start_position} / {counter} (%{round(counter_verified_start_position / counter * 100, 2)}) single-end entry has the same start position with one of the pairs (Verified)")
+print(f"{len(aligned_single) - len(aligned_paired_insingle)} (%{round((len(aligned_single) - len(aligned_paired_insingle)) / counter * 100, 2)}) reads were found exclusively in single-sam but not paired.")
 print(f"\t- Among those, {counter_protein_coding_exclusively_single} reads were protein coding.")
 print(f"\t- Among those, {counter_noncoding_exclusively_single} reads were not protein coding.")
-print(f"* {counter_far_apart} (%{round(counter_far_apart / counter * 100, 2)}) reads were found in both but could not be verified.")
-print(f"\t- Among those, {counter_close_offset} reads were aligned very close (within {OFFSET*2} nt.) in single-end compared to paired-end.")
-print(f"\t- Among those, {len(aligned_single) - counter_verified_start_position - counter_close_offset} reads were aligned significantly differently.")
+print(f"{(counter_far_apart + counter_close_offset)} (%{round((counter_far_apart + counter_close_offset) / counter * 100, 2)}) reads were found in both but could not be verified.")
+print(f"\t- Among those, {counter_close_offset} reads were aligned very close (within {OFFSET*2} nt) in single-end compared to paired-end.")
+print(f"\t- Among those, {counter_far_apart} reads were aligned significantly differently.")
 print(f"\t\t. Both non-coding: {counter_both_non_coding}")
 print(f"\t\t. Both protein coding: {counter_both_coding}")
 print(f"\t\t. Only single-end protein coding: {counter_singleprotein_not_paired}")
