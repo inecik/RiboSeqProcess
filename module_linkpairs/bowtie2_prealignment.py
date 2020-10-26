@@ -46,7 +46,9 @@ bowtie2_run = subprocess.run((
     f"cd {output_module_dir};"  # Change the directory to the index directory
     f"{which('bowtie2')} "  # Run Bowtie2 module
     "-D 40 -R 6 -N 0 -L 20 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
-    "-I30 -X150 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
+    "-I20 -X150 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
+    "--score-min G,20,6 "  # min score lowered
+    "--ma 3 "  # ma bonus increased
     "--no-unal "  # To suppress the non-aligned reads
     "-q "  # Specifies the inputs are in fastq format 
     f"-p{cpu_count()} "  # Number of core to use

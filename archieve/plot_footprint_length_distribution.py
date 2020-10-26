@@ -22,19 +22,14 @@ __status__ = "Development"
 
 # CONSTANTS
 FIGURE_MAIN = "figures"  # name of the figure containing folder
-DATABASE_FASTA = "bowtie2_prealignment/footprints_UMI.fasta"  # Name of footprint fasta file
 FIGURE_NAME = "footprint_length_distribution"
 
 
 # Operations for working environment
-running_directory = os.getcwd()
-data_repo_dir = os.path.join(running_directory, FIGURE_MAIN)
-if not os.access(data_repo_dir, os.W_OK) or not os.path.isdir(data_repo_dir):  # Create directory if not exist
-    print("Data directory created")
-    os.mkdir(data_repo_dir)
-input_path = os.path.join(running_directory, DATABASE_FASTA)
-output_path_log = os.path.join(data_repo_dir, FIGURE_NAME + "_log.pdf")
-output_path_lin = os.path.join(data_repo_dir, FIGURE_NAME + "_linear.pdf")
+input_path = sys.argv[1]
+output_dir = sys.argv[2]
+output_path_log = os.path.join(output_dir, FIGURE_NAME + "_log.pdf")
+output_path_lin = os.path.join(output_dir, FIGURE_NAME + "_linear.pdf")
 
 
 # Read fasta file and count the length of sequence
@@ -50,7 +45,7 @@ with open(input_path, "r") as handle:  # Read the fasta record by a function in 
 
 # Linear scale
 seaborn.distplot(list(lengths.keys()), hist_kws={"weights":list(lengths.values())},
-                 kde=False, norm_hist=True, bins=len(lengths))
+                 kde=False, norm_hist=True, bins=len(lengths), color="salmon")
 plt.xlabel("Footprint Length")
 plt.ylabel("Density")
 seaborn.despine()  # Removes top and right frame
@@ -59,7 +54,7 @@ plt.savefig(output_path_log)  # Save to directory
 
 # Log scale
 seaborn.distplot(list(lengths.keys()), hist_kws={"weights":list(lengths.values())},
-                 kde=False, norm_hist=True, bins=len(lengths))
+                 kde=False, norm_hist=True, bins=len(lengths), color="salmon")
 plt.yscale('log')  # To see the distribution better
 plt.xlabel("Footprint Length")
 plt.ylabel("Density")
