@@ -12,7 +12,7 @@ The output file is created at the working directory.
 import os
 import subprocess
 import sys
-import shutil
+from shutil import which
 import multiprocessing
 
 
@@ -25,77 +25,105 @@ __email__ = "k.inecik@gmail.com"
 __status__ = "Development"
 
 
-# CONSTANTS
-OUTP_MAIN = "OUTPUT"  # Output files like sam or fasta
-TEMP_MAIN = "TEMP"  # Created files to make scripts work like indexes.
-FIGU_MAIN = "FIGURES"
-
-
 # Inputs
-raw_inputs = {'read_1': sys.argv[1], 'read_2': sys.argv[2]}  # Command line inputs for the reads
+OUTP_MAIN = sys.argv[3]
+TEMP_MAIN = sys.argv[4]
+FIGU_MAIN = sys.argv[5]
 
 
-# Obtain the root dir names for scripts to run properly
-running_directory = os.getcwd()  # Where this script is called
+# Obtain the root dir for scripts to run properly
 scripts_directory = os.path.dirname(__file__)  # Where this package is
 
 
-# Create directories to work on
-output_dir = os.path.join(running_directory, OUTP_MAIN)
-if not os.access(output_dir, os.W_OK) or not os.path.isdir(output_dir):  # Create directory if not exist
-    os.mkdir(output_dir)
-
-tempor_dir = os.path.join(running_directory, TEMP_MAIN)
-if not os.access(tempor_dir, os.W_OK) or not os.path.isdir(tempor_dir):  # Create directory if not exist
-    os.mkdir(tempor_dir)
-
-figure_dir = os.path.join(running_directory, FIGU_MAIN)
-if not os.access(figure_dir, os.W_OK) or not os.path.isdir(figure_dir):  # Create directory if not exist
-    os.mkdir(figure_dir)
-
-
-# ____________________________________________________________
-# Cutadapt Module
-# ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-
-
+# Preprocessing Module
+#
+preprocess_inputs = {'read_1': sys.argv[1], 'read_2': sys.argv[2]}  # Command line inputs for the reads
 subprocess.run((
     f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, "module_cutadapt/cutadapt.py")} "  # Script directory relative to main.py
-    f"{raw_inputs['read_1']} "  # sys.argv[1] 
-    f"{raw_inputs['read_2']} "  # sys.argv[2]
-    f"{output_dir}"  # sys.argv[3]
+    f"{os.path.join(scripts_directory, 'module_preprocessing/cutadapt_umitools.py')} "  # Relative script dir
+    f"{preprocess_inputs['read_1']} "  # sys.argv[1] 
+    f"{preprocess_inputs['read_2']} "  # sys.argv[2]
+    f"{OUTP_MAIN}"
 ), shell=True)
 
 
-# ____________________________________________________________ 
-# RNA Remove Module
-# ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-
-rna_remove_inputs = {'read_1': "read1_cutadapt.fastq.gz", 'read_2': "read2_cutadapt_umi_aware.fastq.gz"}
+# Cleanup Module
+#
+cleanup_inputs = {'read_1': "read_1_no-adapt_umi-aware.fastq.gz", 'read_2': "read_2_cutadapt_umi_aware.fastq.gz"}
 
 # Genome indexes
-subprocess.run((  # todo: check if exist, run otherwise
+subprocess.run((
     f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, "module_rnaremove/database_rnaremove_bowtie2.py")} "  # Script directory relative to main.py
-    f"{TEMP_MAIN} "  # sys.argv[1] 
+    f"{os.path.join(scripts_directory, 'module_cleanup/database_rnaremove_bowtie2.py')} "  # Relative script dir
+    f"{TEMP_MAIN} "  # sys.argv[1]
 ), shell=True)
 
 # Alignment
-
-#### todo INCOMPLETE HERE
 subprocess.run((
     f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, "module_rnaremove/bowtie2_rnaremove.py")} "  # Script directory relative to main.py
-    f"{rna_remove_inputs['read_1']} "  # sys.argv[1] 
-    f"{rna_remove_inputs['read_2']} "  # sys.argv[2]
-    f"{output_dir}"  # sys.argv[3]
+    f"{os.path.join(scripts_directory, 'module_cleanup/bowtie2_rnaremove.py')} " 
+    f"{cleanup_inputs['read_1']} "  # sys.argv[1] 
+    f"{cleanup_inputs['read_2']} "  # sys.argv[2]
+    f"{OUTP_MAIN} "  # sys.argv[3]
+    f"{TEMP_MAIN}"  # sys.argv[3]
 ), shell=True)
 
-# Run link_reads.py
+
+# Link Pairing module
+#
+linkpair_inputs = {'read_1': "read_1_norRNA.fastq", 'read_2': "read_2_norRNA.fastq"}
+
+# Genome indexing
+subprocess.run((
+    f"{which('python3')} "  # Define which python installation to use
+    f"{os.path.join(scripts_directory, 'module_linkpairs/database_transcriptome_bowtie2.py')} "  # Relative script dir
+    f"{TEMP_MAIN} "  # sys.argv[1]
+), shell=True)
+
+# Alignment
+subprocess.run((
+    f"{which('python3')} "  # Define which python installation to use
+    f"{os.path.join(scripts_directory, 'module_linkpairs/bowtie2_prealignment.py')} " 
+    f"{linkpair_inputs['read_1']} "  # sys.argv[1] 
+    f"{linkpair_inputs['read_2']} "  # sys.argv[2]
+    f"{OUTP_MAIN} "  # sys.argv[3]
+    f"{TEMP_MAIN}"  # sys.argv[3]
+), shell=True)
+
+# Re-create fasta
+subprocess.run((
+    f"{which('python3')} "  # Define which python installation to use
+    f"{os.path.join(scripts_directory, 'module_linkpairs/sam_processor.py')} " 
+    f"{OUTP_MAIN} "  # sys.argv[3]
+    f"{TEMP_MAIN}"  # sys.argv[3]
+), shell=True)
 
 
-# Run star_alignment.py
+# Genome alignment module
+#
+genomealignment_inputs = {"read": "bowtie2_prealignment/footprints.fasta"}
 
+# Genome indexing
+subprocess.run((
+    f"{which('python3')} "  # Define which python installation to use
+    f"{os.path.join(scripts_directory, 'module_genomealignment/star_genome_index.py')} "  # Relative script dir
+    f"{TEMP_MAIN}"  # sys.argv[1]
+), shell=True)
+
+# Alignment
+subprocess.run((
+    f"{which('python3')} "  # Define which python installation to use
+    f"{os.path.join(scripts_directory, 'module_genomealignment/star_alignment_single.py')} " 
+    f"{genomealignment_inputs['read']} "  # sys.argv[1] 
+    f"{OUTP_MAIN} "  # sys.argv[2]
+    f"{TEMP_MAIN}"  # sys.argv[3]
+), shell=True)
+
+# UMI deduplication
+subprocess.run((
+    f"{which('python3')} "  # Define which python installation to use
+    f"{os.path.join(scripts_directory, 'module_genomealignment/umitools_dedup.py')} "  # Relative script dir
+    f"{OUTP_MAIN}"
+), shell=True)
 
 # Run assignment
