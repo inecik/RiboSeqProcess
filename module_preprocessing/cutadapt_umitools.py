@@ -5,6 +5,7 @@ Cutadapt for paired end sequencing, runs for both reads
 
 import os
 import sys
+import re
 import subprocess
 from multiprocessing import cpu_count
 from shutil import which
@@ -16,6 +17,8 @@ adapter_seq_read_2 = None
 # Mati and Kai's protocol does not necessitates to cut read 2.
 # Because read 2 is 35 nt and contains 10 nt sequence to be trimmed anyway.
 # There is no chance for sequencing procedure to incorporate corresponding adapter sequence.
+PATTERN_read1 = "^(?P<umi_1>.{2}).*"  # Regex to get UMI from first 2 in read1
+PATTERN_read2 = ".*(?P<umi_2>.{5})(?P<discard_2>.{5})$"  # # Regex to get rid of barcode and take 5 nt UMI from read 2
 
 
 # Inputs
@@ -23,14 +26,12 @@ read_1 = sys.argv[1]  # Command line input 1 for read 1. Assuming it is fastq.gz
 read_2 = sys.argv[2]  # Command line input 2 for read 2. Assuming it is fastq.gz
 output_dir = sys.argv[3]  # Command line input 3 for the directory for output files, as described in main.py
 read_paths = [read_1, read_2]
-NAMES = ["read1", "read2"]
-OUTPUT_DATA_REPO = "cutadapt_module"
-JULIA_NAME = "ilia_cutadapt_trimmed_reads_11.10.2019.jl"
+NAMES = ["read_1", "read_2"]
+OUTPUT_DATA_REPO = "preprocessing_module"
 adapters = [adapter_seq_read_1, adapter_seq_read_2]
 
 
 # Create and set working directory
-julia_script_dir = os.path.join(os.path.dirname(__file__), JULIA_NAME)  # Julia script should be next to this script.
 output_dir_module = os.path.join(output_dir, OUTPUT_DATA_REPO)
 if not os.access(output_dir_module, os.W_OK) or not os.path.isdir(output_dir_module):  # Create directory if not exist
     os.mkdir(output_dir_module)
@@ -47,6 +48,7 @@ temp_paths = [os.path.join(output_dir_module, i) for i in temp_paths]
 read1_adapter = f"-a {adapters[0]}" if adapters[0] else ""  # Create flag is adapter is provided
 read2_adapter = f"-A {adapters[1]}" if adapters[1] else ""  # Create flag is adapter is provided
 
+
 subprocess.run((
     f"{which('cutadapt')} "  # Define which cutadapt installation to use
     f"--cores={cpu_count()} "  # Define how many core to be used. All cores are now using
@@ -60,29 +62,19 @@ subprocess.run((
 ), shell=True)
 
 
-# Cutadapt run to trim 2 nt UMI at 5' end and 5 nt L1 barcode at 3' end
-temp2_paths = [f"{NAMES[0]}_cutadapt.fastq.gz", f"{NAMES[1]}_cutadapt_untrimmed_umi.fastq.gz"]
-temp2_paths = [os.path.join(output_dir_module, i) for i in temp2_paths]
+# Umi-tools
+final_paths = [f"{i}_no-adapt_umi-aware.fastq.gz" for i in NAMES]
+final_paths = [os.path.join(output_dir_module, i) for i in final_paths]
+
 
 subprocess.run((
-    f"{which('cutadapt')} "  # Define which cutadapt installation to use
-    f"--cores={cpu_count()} "  # Define how many core to be used. All cores are now using
-    f"-u2 -U5 "  # Settings for trimming 5' and 3' ends
-    f"-o {temp2_paths[0]} -p {temp2_paths[1]} "  # Path to output trimmed sequences
-    f"{temp_paths[0]} {temp_paths[1]} "  # Input file for 
-    f"1> 'report_cutadapt_trimming.txt'"
-), shell=True)
-
-
-# Run Ilia's Julia script to create UMI aware trimmed data
-# It should be run only read 2 as it contains the UMI at 5' end
-umi_output_path = os.path.join(output_dir_module, f"{NAMES[1]}_cutadapt_umi_aware.fastq.gz")
-subprocess.run((
-    f"{which('julia')} "  # Define which julia installation to use
-    f"{julia_script_dir} "  # The path for the script
-    f"{temp2_paths[1]} "  # Input
-    f"{umi_output_path} "  # Output
-    "--umi5 5"  # Settings
+    f"{which('umi_tools')} extract "  # Define which extract installation to use
+    "--extract-method=regex "
+    f"--bc-pattern='{PATTERN_read1}' "  # Barcode pattern
+    f"--bc-pattern2='{PATTERN_read2}' "  # Barcode pattern for paired reads"
+    f"-I {temp_paths[0]} -S {final_paths[0]} "  # Input and output for read 1
+    f"--read2-in={temp_paths[1]} --read2-out={final_paths[1]} "  # Input and output for read 2
+    f"--log=umi_tools.log" # Log the results
 ), shell=True)
 
 
