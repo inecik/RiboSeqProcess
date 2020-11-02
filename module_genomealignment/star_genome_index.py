@@ -47,7 +47,7 @@ if not os.access(db_nm_fa_uncmprsd, os.R_OK) or not os.path.isfile(db_nm_fa_uncm
         subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/{db_nm_fa}", shell=True)
     subprocess.run(f"gzip -d {db_nm_fa}", shell=True)  # Uncompress gz file
 
-# todo: <<<< gff3 kullan >>>>
+
 # Download annotation file
 if not os.access(fb_nm_gtf_uncmprsd, os.R_OK) or not os.path.isfile(fb_nm_gtf_uncmprsd):
     if not os.access(fb_nm_gtf, os.R_OK) or not os.path.isfile(fb_nm_gtf):
