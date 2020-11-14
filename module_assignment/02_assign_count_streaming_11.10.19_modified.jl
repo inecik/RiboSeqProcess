@@ -1,5 +1,9 @@
 #!/usr/bin/env julia
 
+# NOTE: "UMI-signal is changed from '____' to '_'!
+# It is basically what 'umi_tools extract' outputs!
+# Line 166 and line 727 are changed! 
+
 Base.CoreLogging.disable_logging(Base.CoreLogging.Debug)
 
 using BioAlignments
@@ -160,7 +164,7 @@ end
 function UMIRead(record::Union{SAM.Record, BAM.Record}, clip5::Unsigned, asstype::AssignmentType)
     fmt = parentmodule(typeof(record))
     umistr = fmt.tempname(record)
-    umiseq = DNASequence(umistr[(findlast("____", umistr).stop + 1):end])
+    umiseq = DNASequence(umistr[(findlast("_", umistr).stop + 1):end])
 
     aln = fmt.alignment(record)
     seq = fmt.sequence(record)
@@ -720,7 +724,7 @@ s = ArgParseSettings()
         default = UInt8(0)
         required = false
     "--use_umis", "-u"
-        help = "Use UMI information to discard PCR duplicates. This option assumes that the UMI is stored as the last part of the read name, separated by '____' from the actual read ID. INFILE must be coordinate-sorted."
+        help = "Use UMI information to discard PCR duplicates. This option assumes that the UMI is stored as the last part of the read name, separated by '_' from the actual read ID. INFILE must be coordinate-sorted."
         action = :store_true
     "--length_range", "-l"
         help = "Valid read lengths. Must be a range expression, e.g. \"20:50\" will only include reads that are between 20 and 50 bases long (after 5' clipping), whereas \"20:\" will include all reads that are at least 20 bases long."

@@ -9,18 +9,10 @@ The output folder will be mentioned bowtie2_prealignment folder.
 import os
 import re
 import sys
+import joblib
 
 import pysam
 from Bio import SeqIO
-
-
-# Authorship information
-__author__ = "Kemal İnecik"
-__license__ = "GPLv3"
-__version__ = "0.1"
-__maintainer__ = "Kemal İnecik"
-__email__ = "k.inecik@gmail.com"
-__status__ = "Development"
 
 
 # CONSTANTS
@@ -40,7 +32,7 @@ output_fasta = os.path.join(data_repo_dir, OUTPUT_NAME)
 
 
 # Take the transcript sequences into random access memory
-print("Take the transcript sequences into random access memory")
+print("Take the transcript sequences into random access memory.")
 transcript_seqs = dict()  # Create a dictionary with transcript id as keys
 with open(fasta_transcriptome, "r") as handle:  # Use previously filtered fasta file
     for record in SeqIO.parse(handle, "fasta"):
@@ -48,7 +40,7 @@ with open(fasta_transcriptome, "r") as handle:  # Use previously filtered fasta 
 
 
 # Processing the SAM file
-print("Processing the SAM file")
+print("Processing the SAM file.")
 with open(output_fasta, "w") as output_handle:  # Open output fasta file
     popup_dict = dict()
     with pysam.AlignmentFile(sam_path, "r") as sam_handle:  # Open sam file
@@ -81,6 +73,10 @@ with open(output_fasta, "w") as output_handle:  # Open output fasta file
                     fp = transcript_seqs[e.reference_name][start_seq: end_seq]
                     # Write down the identifier and sequence to fasta file
                     output_handle.write(f">{e.query_name}\n{fp}\n")
+
+
+# Output the final file path to use in a pipeline
+joblib.dump(output_fasta, os.path.join(temp_dir, ".module_linkpair_paths.joblib"))
 
 
 # End of the script

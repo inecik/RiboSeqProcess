@@ -8,10 +8,10 @@ import os
 import sys
 import re
 import pysam
-from pyensembl import EnsemblRelease  #pyensembl install --release 96 --species human
+from pyensembl import EnsemblRelease  #pyensembl install --release 100 --species human
 
 sys.path.append(os.path.abspath(__file__).split("Ribo-seq-Analysis")[0] + "Ribo-seq-Analysis")
-from archieve.common_functions import progressBarForTerminal
+from module_supplementary.common_functions import progressBarForTerminal
 
 
 # Authorship information
@@ -27,7 +27,7 @@ __status__ = "Development"
 sam1 = sys.argv[1]  # Single
 sam2 = sys.argv[2]  # Paired
 try:
-    data = EnsemblRelease(96)
+    data = EnsemblRelease(100)
 except:
     quit(f"Run following command before the code:\npyensembl install --release 96 --species human\n")
 

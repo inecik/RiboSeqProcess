@@ -11,17 +11,17 @@ import os
 import sys
 import subprocess
 from multiprocessing import cpu_count
-from datetime import datetime
 from shutil import which
 
+sys.path.append(os.path.abspath(__file__).split("Ribo-seq-Analysis")[0] + "Ribo-seq-Analysis")
+from module_supplementary.common_functions import bcolors as c
 
-# Authorship information
-__author__ = "Kemal İnecik"
-__license__ = "GPLv3"
-__version__ = "0.1"
-__maintainer__ = "Kemal İnecik"
-__email__ = "k.inecik@gmail.com"
-__status__ = "Development"
+
+# Check if necessary packages were installed.
+if not which('bowtie2'):
+    sys.exit(f"{c.FAIL}Bowtie2 package should be installed.{c.ENDC}")
+else:
+    print("Bowtie2 installation is found.")
 
 
 # CONSTANTS
@@ -39,17 +39,22 @@ temp_dir = sys.argv[4]
 output_module_dir = os.path.join(output_dir, DATA_REPO)
 if not os.access(output_module_dir, os.W_OK) or not os.path.isdir(output_module_dir):  # Create directory if not exist
     os.mkdir(output_module_dir)
+    print("Output directory created.")
 output_path = os.path.join(output_module_dir, SAM_FILE)
 index_files = os.path.join(temp_dir, INDEX_DIR, INDEX_BASE)
 
 
+print("Alignment to transcriptome is started.")
 bowtie2_run = subprocess.run((
     f"cd {output_module_dir};"  # Change the directory to the index directory
     f"{which('bowtie2')} "  # Run Bowtie2 module
-    "-D 40 -R 6 -N 0 -L 20 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
-    "-I20 -X150 "  # Search only those that has 30-180 nt. Makes Bowtie2 slower. 
-    "--score-min G,20,6 "  # min score lowered
-    "--ma 3 "  # ma bonus increased
+    # "-D 40 -R 6 -N 0 -L 20 -i S,1,0.50 " for run_20201104
+    "-D 20 -R 3 -N 0 -L 10 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
+    "-I20 -X120 "  # Search only those that has 20-120 nt. 
+    # "--score-min G,20,5.75 " for run_20201104
+    "--score-min G,15,5 "  # Min score lowered
+    # "--ma 3 " for run_20201104
+    "--ma 3 --mp 5,1 "  # ma bonus increased
     "--no-unal "  # To suppress the non-aligned reads
     "-q "  # Specifies the inputs are in fastq format 
     f"-p{cpu_count()} "  # Number of core to use
@@ -60,7 +65,8 @@ bowtie2_run = subprocess.run((
     f"-x {index_files} "  # Index directory with the base name
     f"-1 {rRNA_depleted_fasta_read1} "  # Read 1
     f"-2 {rRNA_depleted_fasta_read2} "  # Read 2
-    f"-S {output_path}.sam"  # Output sam file
+    f"-S {output_path}.sam "  # Output sam file
+    "2> report_indexing.log"
 ), shell=True)
 
 

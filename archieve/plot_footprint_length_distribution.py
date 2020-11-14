@@ -45,7 +45,7 @@ with open(input_path, "r") as handle:  # Read the fasta record by a function in 
 
 # Linear scale
 seaborn.distplot(list(lengths.keys()), hist_kws={"weights":list(lengths.values())},
-                 kde=False, norm_hist=True, bins=len(lengths), color="orchid")
+                 kde=False, norm_hist=True, bins=len(lengths), color="tomato")
 plt.xlabel("Footprint Length")
 plt.ylabel("Density")
 seaborn.despine()  # Removes top and right frame
@@ -54,7 +54,7 @@ plt.savefig(output_path_log)  # Save to directory
 
 # Log scale
 seaborn.distplot(list(lengths.keys()), hist_kws={"weights":list(lengths.values())},
-                 kde=False, norm_hist=True, bins=len(lengths), color="orchid")
+                 kde=False, norm_hist=True, bins=len(lengths), color="tomato")
 plt.yscale('log')  # To see the distribution better
 plt.xlabel("Footprint Length")
 plt.ylabel("Density")
