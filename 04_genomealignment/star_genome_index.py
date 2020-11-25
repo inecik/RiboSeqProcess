@@ -11,7 +11,7 @@ from multiprocessing import cpu_count
 from shutil import which
 
 sys.path.append(os.path.abspath(__file__).split("Ribo-seq-Analysis")[0] + "Ribo-seq-Analysis")
-from module_supplementary.common_functions import bcolors as c
+from supplementary.common_functions import bcolors as c
 
 
 # CONSTANTS
