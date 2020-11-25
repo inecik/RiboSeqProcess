@@ -37,7 +37,7 @@ if not os.access(temp_module_dir, os.W_OK) or not os.path.isdir(temp_module_dir)
 
 
 # Search https://rnacentral.org to the following
-# TAXONOMY:"9606" AND (so_rna_type_name:"RRNA" OR so_rna_type_name:"TRNA" ) AND (expert_db:"Ensembl" OR expert_db:"SILVA" OR expert_db:"NONCODE" OR expert_db:"Rfam" OR expert_db:"PDBe" OR expert_db:"RefSeq" OR expert_db:"GeneCards" )
+# TAXONOMY:"9606" AND (so_rna_type_name:"RRNA" OR so_rna_type_name:"TRNA" ) AND (expert_db:"Ensembl" OR expert_db:"SILVA" OR expert_db:"NONCODE" OR expert_db:"Rfam" OR expert_db:"PDBe" OR expert_db:"RefSeq" OR expert_db:"GeneCards" ) AND (rna_type:"rRNA" OR rna_type:"tRNA")
 
 
 # Path of the manual curation of human rRNAs

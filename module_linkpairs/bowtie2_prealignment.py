@@ -48,11 +48,9 @@ print("Alignment to transcriptome is started.")
 bowtie2_run = subprocess.run((
     f"cd {output_module_dir};"  # Change the directory to the index directory
     f"{which('bowtie2')} "  # Run Bowtie2 module
-    # "-D 40 -R 6 -N 0 -L 20 -i S,1,0.50 " for run_20201104
-    "-D 20 -R 3 -N 0 -L 10 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
+    "-D 40 -R 6 -N 0 -L 15 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
     "-I20 -X120 "  # Search only those that has 20-120 nt. 
-    # "--score-min G,20,5.75 " for run_20201104
-    "--score-min G,15,5 "  # Min score lowered
+    "--score-min G,20,5.5 "  # Min score lowered
     # "--ma 3 " for run_20201104
     "--ma 3 --mp 5,1 "  # ma bonus increased
     "--no-unal "  # To suppress the non-aligned reads
