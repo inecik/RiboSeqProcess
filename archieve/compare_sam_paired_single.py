@@ -10,17 +10,9 @@ import re
 import pysam
 from pyensembl import EnsemblRelease  #pyensembl install --release 100 --species human
 
-sys.path.append(os.path.abspath(__file__).split("Ribo-seq-Analysis")[0] + "Ribo-seq-Analysis")
-from supplementary.common_functions import progressBarForTerminal
-
-
-# Authorship information
-__author__ = "Kemal İnecik"
-__license__ = "GPLv3"
-__version__ = "0.1"
-__maintainer__ = "Kemal İnecik"
-__email__ = "k.inecik@gmail.com"
-__status__ = "Development"
+repository_name = "RiboSeqProcess"
+sys.path.append(os.path.abspath(__file__).split(repository_name)[0] + repository_name)
+from archieve.common_functions import progressBarForTerminal
 
 
 # Constants

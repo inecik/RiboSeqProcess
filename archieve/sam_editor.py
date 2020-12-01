@@ -6,14 +6,6 @@ import os
 import pysam
 
 
-# Authorship information
-__author__ = "Kemal İnecik"
-__license__ = "GPLv3"
-__version__ = "0.1"
-__maintainer__ = "Kemal İnecik"
-__email__ = "k.inecik@gmail.com"
-__status__ = "Development"
-
 
 # Operations for working environment and file name related operations
 read_sam = "/Users/kemalinecik/Desktop/single.sam"  # sys.argv[1]

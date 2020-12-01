@@ -8,37 +8,25 @@ import os
 import subprocess
 from shutil import which
 
-
-
-# Authorship information
-__author__ = "Kemal İnecik"
-__license__ = "GPLv3"
-__version__ = "0.1"
-__maintainer__ = "Kemal İnecik"
-__email__ = "k.inecik@gmail.com"
-__status__ = "Development"
-
+repository_name = "RiboSeqProcess"
+sys.path.append(os.path.abspath(__file__).split(repository_name)[0] + repository_name)
+from archieve.common_functions import *
 
 # Inputs
-output_dir = sys.argv[1]
-temp_dir = sys.argv[2]
-sam_file = sys.argv[3]
+sam_file = sys.argv[1]
+output_dir = sys.argv[2]
+temp_dir = sys.argv[3]
 
 
 # CONSTANTS
 GFF3_FILE = "Homo_sapiens.GRCh38.96.chr.gff3.gz"
-OUTPUT_DATA_REPO = "julia_assignment_module"
-TEMP_DATA_REPO = "julia_assignment_module"
+OUTPUT_DATA_REPO = "05_julia_assignment"
+TEMP_DATA_REPO = "05_julia_assignment"
 
 
 # Create dir if not exist
-data_repo_dir = os.path.join(output_dir, OUTPUT_DATA_REPO)
-if not os.access(data_repo_dir, os.W_OK) or not os.path.isdir(data_repo_dir):  # Create directory if not exist
-    os.mkdir(data_repo_dir)
-# Create dir if not exist
-temp_repo_dir = os.path.join(temp_dir, TEMP_DATA_REPO)
-if not os.access(temp_repo_dir, os.W_OK) or not os.path.isdir(temp_repo_dir):  # Create directory if not exist
-    os.mkdir(temp_repo_dir)
+data_repo_dir = create_dir(output_dir, OUTPUT_DATA_REPO)
+temp_repo_dir = create_dir(temp_dir, TEMP_DATA_REPO)
 
 
 # Create or load SQL database
@@ -59,7 +47,6 @@ julia_path = os.path.join(os.path.dirname(__file__), "02_assign_count_streaming_
 subprocess.run((
     f"{which('julia')} {julia_path} "  # Which Julia installation to use and the script
     f"-g {corrected_gff} "  # Gff3 file. Removed of duplicated gene names
-    # "-c 1 "  # Inherited from Mati. Removed because link-pairing module removes it.
     "-a 3 "  # Assignment from 5'
     # "-u "  # Inherited from Mati. Removed because umi-tool deduplication is already done.
     f"-o {data_repo_dir} "  # Output file

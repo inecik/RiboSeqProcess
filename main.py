@@ -7,11 +7,10 @@ If there is more than o sample or replicates, you have to run the script multipl
 
 
 import os
-import subprocess
 import sys
-from shutil import which
-from supplementary.common_functions import bcolors as c
 import joblib
+from archieve.common_functions import *
+from commands import *
 
 
 # Authorship information
@@ -23,146 +22,92 @@ __email__ = "k.inecik@gmail.com"
 __status__ = "Development"
 
 
-# Inputs
-OUTP_MAIN = sys.argv[3]
-TEMP_MAIN = sys.argv[4]
-
-
 # Obtain the root dir for scripts to run properly
 scripts_directory = os.path.dirname(__file__)  # Where this package is
 
 
+# Chose the type of analysis
+print(f"{bcolors.HEADER}Choose one of the following:{bcolors.ENDC}\n"
+      f"{bcolors.OKCYAN}1.\tSingle-end sequencing\n"
+      f"{bcolors.OKCYAN}2.\tPaired-end sequencing\n"
+      f"{bcolors.OKCYAN}3.\tPaired-end sequencing & Link pairs\n")
+
+selection = None
+while not selection:
+    selection = input("Enter your analysis: ")
+    selection = int(selection) if selection in ["1", "2", "3"] else None
+print()
+
+# Get inputs for output and temp directories
+output_dir = sys.argv[1]
+temp_dir = sys.argv[2]
 
 
+# Single-end sequencing
+if selection == 1:
 
-# Preprocessing Module
-# ____________________
+    assert len(sys.argv) == 4
 
-print(f"{c.HEADER}Preprocessing Module.{c.ENDC}")
-preprocess_inputs = {'read_1': sys.argv[1], 'read_2': sys.argv[2]}  # Command line inputs for the reads
-spr_1 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '01_preprocessing/cutadapt_umitools.py')} "  # Relative script dir
-    f"{preprocess_inputs['read_1']} "  # sys.argv[1]
-    f"{preprocess_inputs['read_2']} "  # sys.argv[2]
-    f"{OUTP_MAIN} "
-    f"{TEMP_MAIN}"
-), shell=True)
-if spr_1.returncode != 0: sys.exit(f"{c.FAIL}Error in cutadapt_umitools.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}Preprocessing Module was successfully completed.{c.ENDC}")
+    read1 = sys.argv[3]
 
+    # Module 01: Preprocessing
+    preprocessing_single(scripts_directory, read1, output_dir, temp_dir)
 
+    # Module 02: Cleanup
+    cleanup_input = joblib.load(os.path.join(output_dir, ".01_preprocessing.joblib"))
+    cleanup_create_index(scripts_directory, temp_dir)
+    cleanup_single(scripts_directory, cleanup_input, output_dir, temp_dir)
 
+    # Module 04: Genome Alignment
+    genomealignment_input = joblib.load(os.path.join(output_dir, ".02_cleanup.joblib"))
+    genomealignment_create_index(scripts_directory, temp_dir)
+    genomealignment_single(scripts_directory, genomealignment_input, output_dir, temp_dir)
+    genomealignment_umidedup_single(scripts_directory, output_dir)
 
+    # Module 05: Assignment
+    assignment_input = joblib.load(os.path.join(output_dir, ".04_genomealignment.joblib"))
+    assignment_ilia(scripts_directory, assignment_input["sam"], output_dir, temp_dir)
 
-# Cleanup Module
-# ______________
+# Paired-end sequencing
+elif selection in [2, 3]:
 
-print(f"{c.HEADER}Clean-up Module.{c.ENDC}")
-cleanup_inputs = joblib.load(os.path.join(TEMP_MAIN, ".module_preprocessing_paths.joblib"))
+    assert len(sys.argv) == 5
 
-# Genome indexes
-spr_2 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '02_cleanup/database_rnaremove_bowtie2.py')} "  # Relative script dir
-    f"{TEMP_MAIN} "  # sys.argv[1]
-), shell=True)
-if spr_2.returncode != 0: sys.exit(f"{c.FAIL}Error in database_rnaremove_bowtie2.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}Genome indexing for rRNA removal was successfully completed.{c.ENDC}")
+    read1 = sys.argv[3]
+    read2 = sys.argv[4]
 
-#Alignment
-spr_3 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '02_cleanup/bowtie2_rnaremove.py')} " 
-    f"{cleanup_inputs[0]} "  # sys.argv[1] Read 1
-    f"{cleanup_inputs[1]} "  # sys.argv[2] Read 2
-    f"{OUTP_MAIN} "  # sys.argv[3]
-    f"{TEMP_MAIN}"  # sys.argv[3]
-), shell=True)
-if spr_3.returncode != 0: sys.exit(f"{c.FAIL}Error in bowtie2_rnaremove.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}rRNA removal was successfully completed.{c.ENDC}")
+    # Module 01: Preprocessing
+    preprocessing_paired(scripts_directory, read1, read2, output_dir, temp_dir)
 
+    # Module 02: Cleanup
+    cleanup_inputs = joblib.load(os.path.join(output_dir, ".01_preprocessing.joblib"))
+    cleanup_create_index(scripts_directory, temp_dir)
+    cleanup_paired(scripts_directory, cleanup_inputs[0], cleanup_inputs[1], output_dir, temp_dir)
 
+    if selection == 2:  # No link pairs
 
+        # Module 04: Genome Alignment
+        genomealignment_inputs = joblib.load(os.path.join(output_dir, ".02_cleanup.joblib"))
+        genomealignment_create_index(scripts_directory, temp_dir)
+        genomealignment_paired(scripts_directory, genomealignment_inputs[0], genomealignment_inputs[1], output_dir, temp_dir)
 
+    elif selection == 3:  # Link pairs
 
-# Link Pairing module
-# ___________________
+        # Module 03: Link Pairs
+        linkpair_inputs = joblib.load(os.path.join(output_dir, ".02_cleanup.joblib"))
+        linkpairs_create_index(scripts_directory, temp_dir)
+        linkpairs_alignment(scripts_directory, linkpair_inputs[0], linkpair_inputs[1], output_dir, temp_dir)
+        linkpairs_fasta(scripts_directory, output_dir, temp_dir)
 
-print(f"{c.HEADER}Link Pairing Module.{c.ENDC}")
-linkpair_inputs = joblib.load(os.path.join(TEMP_MAIN, ".module_cleanup_paths.joblib"))
+        # Module 04: Genome Alignment
+        genomealignment_input = joblib.load(os.path.join(output_dir, ".03_linkpairs.joblib"))
+        genomealignment_create_index(scripts_directory, temp_dir)
+        genomealignment_single(scripts_directory, genomealignment_input, output_dir, temp_dir)
+        genomealignment_umidedup_single(scripts_directory, output_dir)
 
-# Genome indexing
-spr_4 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '03_linkpairs/database_transcriptome_bowtie2.py')} "  # Relative script dir
-    f"{TEMP_MAIN} "  # sys.argv[1]
-), shell=True)
-if spr_4.returncode != 0: sys.exit(f"{c.FAIL}Error in database_transcriptome_bowtie2.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}Genome indexing for linking pairs was successfully completed.{c.ENDC}")
-
-# Alignment
-spr_5 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '03_linkpairs/bowtie2_prealignment.py')} " 
-    f"{linkpair_inputs['read_1']} "  # sys.argv[1] 
-    f"{linkpair_inputs['read_2']} "  # sys.argv[2]
-    f"{OUTP_MAIN} "  # sys.argv[3]
-    f"{TEMP_MAIN}"  # sys.argv[3]
-), shell=True)
-if spr_5.returncode != 0: sys.exit(f"{c.FAIL}Error in bowtie2_prealignment.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}Alignment for linking pairs was successfully completed.{c.ENDC}")
-
-# Create fasta
-spr_6 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '03_linkpairs/sam_processor.py')} " 
-    f"{OUTP_MAIN} "  # sys.argv[3]
-    f"{TEMP_MAIN}"  # sys.argv[3]
-), shell=True)
-if spr_6.returncode != 0: sys.exit(f"{c.FAIL}Error in sam_processor.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}Creation of fasta with linked pairs was successfully completed.{c.ENDC}")
+        # Module 05: Assignment
+        assignment_input = joblib.load(os.path.join(output_dir, ".04_genomealignment.joblib"))
+        assignment_ilia(scripts_directory, assignment_input["sam"], output_dir, temp_dir)
 
 
-
-
-
-# Genome alignment module
-# _______________________
-
-print(f"{c.HEADER}Genome Alignment Module.{c.ENDC}")
-genomealignment_input = joblib.load(os.path.join(TEMP_MAIN, ".module_linkpair_paths.joblib"))
-
-# Genome indexing
-spr_7 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '04_genomealignment/star_genome_index.py')} "  # Relative script dir
-    f"{TEMP_MAIN}"  # sys.argv[1]
-), shell=True)
-if spr_7.returncode != 0: sys.exit(f"{c.FAIL}Error in star_genome_index.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}Human genome indexing was successfully completed.{c.ENDC}")
-
-# Alignment
-spr_8 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '04_genomealignment/star_alignment_single.py')} "
-    f"{genomealignment_input} "  # sys.argv[1]
-    f"{OUTP_MAIN} "  # sys.argv[2]
-    f"{TEMP_MAIN}"  # sys.argv[3]
-), shell=True)
-if spr_8.returncode != 0: sys.exit(f"{c.FAIL}Error in star_alignment_single.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}Human genome alignment was successfully completed.{c.ENDC}")
-
-# UMI deduplication
-spr_9 = subprocess.run((
-    f"{which('python3')} "  # Define which python installation to use
-    f"{os.path.join(scripts_directory, '04_genomealignment/umitools_dedup.py')} "  # Relative script dir
-    f"{OUTP_MAIN}"
-), shell=True)
-if spr_9.returncode != 0: sys.exit(f"{c.FAIL}Error in umitools_dedup.py: Exiting.{c.ENDC}")
-print(f"{c.OKCYAN}UMI deduplication was successfully completed.{c.ENDC}")
-
-
-# Run assignment
-
-
+# End of the script

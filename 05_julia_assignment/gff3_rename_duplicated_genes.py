@@ -8,15 +8,6 @@ import os
 import sys
 
 
-# Authorship information
-__author__ = "Kemal İnecik"
-__license__ = "GPLv3"
-__version__ = "0.1"
-__maintainer__ = "Kemal İnecik"
-__email__ = "k.inecik@gmail.com"
-__status__ = "Development"
-
-
 # Inputs
 gff_path = sys.argv[1]
 output_path = os.path.splitext(gff_path)[0] + "_renamed_duplicate_gene_names.gff3"

@@ -16,10 +16,10 @@ from Bio import SeqIO
 
 
 # CONSTANTS
-DATA_REPO = "bowtie2_prealignment"  # Name of the database containing folder
-SAM_FILE = "bowtie2_prealignment.sam"  # Check bowtie2_prealignment.py
+DATA_REPO = "03_linkpairs"  # Name of the database containing folder
+SAM_FILE = "prealignment.sam"  # Check bowtie2_prealignment.py
 OUTPUT_NAME = "footprints.fasta"
-TRANSC_FASTA = "bowtie2_transcriptome/Homo_sapiens.GRCh38.cdna.all_filtered.fa"  # Check database_transc._bowtie2.py
+TRANSC_FASTA = "03_linkpairs/Homo_sapiens.GRCh38.cdna.all_filtered.fa"  # Check database_transc._bowtie2.py
 
 
 # Operations for working environment and file name related operations
@@ -76,7 +76,7 @@ with open(output_fasta, "w") as output_handle:  # Open output fasta file
 
 
 # Output the final file path to use in a pipeline
-joblib.dump(output_fasta, os.path.join(temp_dir, ".module_linkpair_paths.joblib"))
+joblib.dump(output_fasta, os.path.join(output_dir, ".03_linkpairs.joblib"))
 
 
 # End of the script

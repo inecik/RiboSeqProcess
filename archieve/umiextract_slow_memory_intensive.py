@@ -11,7 +11,8 @@ import gzip
 from Bio import SeqIO
 import re
 
-sys.path.append(os.path.abspath(__file__).split("Ribo-seq-Analysis")[0] + "Ribo-seq-Analysis")
+repository_name = "RiboSeqProcess"
+sys.path.append(os.path.abspath(__file__).split(repository_name)[0] + repository_name)
 
 # SETTINGS
 PATTERN_read1 = "^(?P<umi_1>.{2})(.*)$"  # Regex to get UMI from first 2 in read1

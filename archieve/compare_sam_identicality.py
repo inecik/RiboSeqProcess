@@ -11,15 +11,6 @@ import pysam
 from Bio import SeqIO
 
 
-# Authorship information
-__author__ = "Kemal İnecik"
-__license__ = "GPLv3"
-__version__ = "0.1"
-__maintainer__ = "Kemal İnecik"
-__email__ = "k.inecik@gmail.com"
-__status__ = "Development"
-
-
 # Constants
 sam1 = sys.argv[1]
 sam2 = sys.argv[2]

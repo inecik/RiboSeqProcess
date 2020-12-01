@@ -8,17 +8,15 @@ import sys
 import joblib
 import subprocess
 from multiprocessing import cpu_count
-from shutil import which
 
-sys.path.append(os.path.abspath(__file__).split("Ribo-seq-Analysis")[0] + "Ribo-seq-Analysis")
-from supplementary.common_functions import bcolors as c
+repository_name = "RiboSeqProcess"
+sys.path.append(os.path.abspath(__file__).split(repository_name)[0] + repository_name)
+from archieve.common_functions import *
 
 
 # Check if necessary packages were installed.
-if not which('cutadapt') or not which('umi_tools'):
-    sys.exit(f"{c.FAIL}Cutadapt and/or umi_tools packages should be installed.{c.ENDC}")
-else:
-    print("Cutadapt and umi_tools installations are found.")
+check_exist_package("cutadapt")
+check_exist_package("umi_tools")
 
 
 # SETTINGS
@@ -36,17 +34,15 @@ read_1 = sys.argv[1]  # Command line input 1 for read 1. Assuming it is fastq.gz
 read_2 = sys.argv[2]  # Command line input 2 for read 2. Assuming it is fastq.gz
 output_dir = sys.argv[3]  # Command line input 3 for the directory for output files, as described in main.py
 temp_dir = sys.argv[4]
+
+OUTPUT_DATA_REPO = "01_preprocessing"
 read_paths = [read_1, read_2]
 NAMES = ["read_1", "read_2"]
-OUTPUT_DATA_REPO = "preprocessing_module"
 adapters = [adapter_seq_read_1, adapter_seq_read_2]
 
 
 # Create and set working directory
-output_dir_module = os.path.join(output_dir, OUTPUT_DATA_REPO)
-if not os.access(output_dir_module, os.W_OK) or not os.path.isdir(output_dir_module):  # Create directory if not exist
-    os.mkdir(output_dir_module)
-    print("Output directory created.")
+output_dir_module = create_dir(output_dir, OUTPUT_DATA_REPO)  # Create directory if not exist
 os.chdir(output_dir_module)  # Since everything will be output there
 
 
@@ -67,8 +63,8 @@ subprocess.run((
     f"--cores={cpu_count()} "  # Define how many core to be used. All cores are now using
     "--match-read-wildcards "
     f"-q20 -m23 "  # Settings for quality and minimum length to cut the adapter sequence
-    # "--discard-untrimmed "  # todo: Understand/Ask why!?!
-    # "-O6 "  # Require minimum length overlap between read and adapter for an adapter to be found.  # todo: Understand/Ask why!?!
+    # "--discard-untrimmed "  # todo: ask why
+    # "-O6 "  # Require minimum length overlap between read and adapter for an adapter to be found.  # todo: ask why
     f"{read1_adapter} {read2_adapter}".strip() + " "  # The adapter flags. No flanking white space allowed
     f"-o {temp_paths[0]} -p {temp_paths[1]} "  # Path to output trimmed sequences
     f"{read_paths[0]} {read_paths[1]} "  # Input file
@@ -93,7 +89,7 @@ subprocess.run((
 
 
 # Output the final file path to use in a pipeline
-joblib.dump(final_paths, os.path.join(temp_dir, ".module_preprocessing_paths.joblib"))
+joblib.dump(final_paths, os.path.join(output_dir, ".01_preprocessing.joblib"))
 
 
 # End of the script

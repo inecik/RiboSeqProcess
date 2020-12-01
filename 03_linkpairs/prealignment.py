@@ -13,21 +13,19 @@ import subprocess
 from multiprocessing import cpu_count
 from shutil import which
 
-sys.path.append(os.path.abspath(__file__).split("Ribo-seq-Analysis")[0] + "Ribo-seq-Analysis")
-from supplementary.common_functions import bcolors as c
+repository_name = "RiboSeqProcess"
+sys.path.append(os.path.abspath(__file__).split(repository_name)[0] + repository_name)
+from archieve.common_functions import *
 
 
 # Check if necessary packages were installed.
-if not which('bowtie2'):
-    sys.exit(f"{c.FAIL}Bowtie2 package should be installed.{c.ENDC}")
-else:
-    print("Bowtie2 installation is found.")
+check_exist_package("bowtie2")
 
 
 # CONSTANTS
-DATA_REPO = "bowtie2_prealignment"  # Name of the database containing folder
-SAM_FILE = "bowtie2_prealignment"
-INDEX_DIR = "bowtie2_transcriptome/bowtie2_index/"  # Check database_transcriptome_bowtie2.py
+DATA_REPO = "03_linkpairs"  # Name of the database containing folder
+SAM_FILE = "prealignment.sam"
+INDEX_DIR = "03_linkpairs/index_transcriptome/"  # Check database_transcriptome_bowtie2.py
 INDEX_BASE = "homo_sapiens_protein_coding_transcriptome"  # Check database_transcriptome_bowtie2.py
 
 
@@ -36,10 +34,8 @@ rRNA_depleted_fasta_read1 = sys.argv[1]  # Accept as the first command line argu
 rRNA_depleted_fasta_read2 = sys.argv[2]  # Accept as the second command line argument
 output_dir = sys.argv[3]
 temp_dir = sys.argv[4]
-output_module_dir = os.path.join(output_dir, DATA_REPO)
-if not os.access(output_module_dir, os.W_OK) or not os.path.isdir(output_module_dir):  # Create directory if not exist
-    os.mkdir(output_module_dir)
-    print("Output directory created.")
+
+output_module_dir = create_dir(output_dir, DATA_REPO)
 output_path = os.path.join(output_module_dir, SAM_FILE)
 index_files = os.path.join(temp_dir, INDEX_DIR, INDEX_BASE)
 
@@ -51,19 +47,18 @@ bowtie2_run = subprocess.run((
     "-D 40 -R 6 -N 0 -L 15 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
     "-I20 -X120 "  # Search only those that has 20-120 nt. 
     "--score-min G,20,5.5 "  # Min score lowered
-    # "--ma 3 " for run_20201104
     "--ma 3 --mp 5,1 "  # ma bonus increased
     "--no-unal "  # To suppress the non-aligned reads
-    "-q "  # Specifies the inputs are in fastq format 
     f"-p{cpu_count()} "  # Number of core to use
     "--no-discordant "  # Filter pairs does not obey orientation/length constraints 
     "--no-mixed "  # Do not search for individual pairs if one in a pair does not align.
     "--local "  # Indicate the alignment is local. Soft clipping will be applied.
     "--time "  # Print the wall-clock time required to load the index files and align the reads. 
     f"-x {index_files} "  # Index directory with the base name
+    "-q "  # Specifies the inputs are in fastq format
     f"-1 {rRNA_depleted_fasta_read1} "  # Read 1
     f"-2 {rRNA_depleted_fasta_read2} "  # Read 2
-    f"-S {output_path}.sam "  # Output sam file
+    f"-S {output_path} "  # Output sam file
     "2> report_indexing.log"
 ), shell=True)
 
