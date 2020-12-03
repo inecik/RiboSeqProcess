@@ -26,29 +26,17 @@ __status__ = "Development"
 scripts_directory = os.path.dirname(__file__)  # Where this package is
 
 
-# Chose the type of analysis
-print(f"{bcolors.HEADER}Choose one of the following:{bcolors.ENDC}\n"
-      f"{bcolors.OKCYAN}1.\tSingle-end sequencing\n"
-      f"{bcolors.OKCYAN}2.\tPaired-end sequencing\n"
-      f"{bcolors.OKCYAN}3.\tPaired-end sequencing & Link pairs\n")
-
-selection = None
-while not selection:
-    selection = input("Enter your analysis: ")
-    selection = int(selection) if selection in ["1", "2", "3"] else None
-print()
-
 # Get inputs for output and temp directories
-output_dir = sys.argv[1]
-temp_dir = sys.argv[2]
+selection = int(sys.argv[1])
+output_dir = sys.argv[2]
+temp_dir = sys.argv[3]
 
 
 # Single-end sequencing
 if selection == 1:
 
-    assert len(sys.argv) == 4
-
-    read1 = sys.argv[3]
+    assert len(sys.argv) == 5
+    read1 = sys.argv[4]
 
     # Module 01: Preprocessing
     preprocessing_single(scripts_directory, read1, output_dir, temp_dir)
@@ -71,10 +59,10 @@ if selection == 1:
 # Paired-end sequencing
 elif selection in [2, 3]:
 
-    assert len(sys.argv) == 5
+    assert len(sys.argv) == 6
 
-    read1 = sys.argv[3]
-    read2 = sys.argv[4]
+    read1 = sys.argv[4]
+    read2 = sys.argv[5]
 
     # Module 01: Preprocessing
     preprocessing_paired(scripts_directory, read1, read2, output_dir, temp_dir)
