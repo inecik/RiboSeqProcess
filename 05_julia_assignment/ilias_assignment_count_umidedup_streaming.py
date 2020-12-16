@@ -19,7 +19,8 @@ temp_dir = sys.argv[3]
 
 
 # CONSTANTS
-GFF3_FILE = "Homo_sapiens.GRCh38.96.chr.gff3.gz"
+ensembl_release = 102
+GFF3_FILE = f"Homo_sapiens.GRCh38.{ensembl_release}.chr_patch_hapl_scaff.gff3.gz"
 OUTPUT_DATA_REPO = "05_julia_assignment"
 TEMP_DATA_REPO = "05_julia_assignment"
 
@@ -35,9 +36,9 @@ gff_path = os.path.join(temp_dir, TEMP_DATA_REPO, gff3_uncomp)
 corrected_gff = os.path.splitext(gff_path)[0] + "_renamed_duplicate_gene_names.gff3"
 if not os.access(corrected_gff, os.R_OK) or not os.path.isfile(corrected_gff):
     if not os.access(gff_path, os.R_OK) or not os.path.isfile(gff_path):
-        subprocess.run((f"cd {temp_repo_dir}; curl -L -R -O ftp://ftp.ensembl.org/pub/release-96/gff3/"
-                       "homo_sapiens/Homo_sapiens.GRCh38.96.chr.gff3.gz"), shell=True)
-        subprocess.run(f"cd {temp_repo_dir}; gzip -d Homo_sapiens.GRCh38.96.chr.gff3.gz", shell=True)
+        subprocess.run((f"cd {temp_repo_dir}; curl -L -R -O ftp://ftp.ensembl.org/pub/release-{ensembl_release}/gff3/"
+                       f"homo_sapiens/{GFF3_FILE}"), shell=True)
+        subprocess.run(f"cd {temp_repo_dir}; gzip -d {GFF3_FILE}", shell=True)
     subprocess.run((f"cd {os.path.dirname(__file__)}; "
                    f"{which('python3')} gff3_rename_duplicated_genes.py {gff_path}"), shell=True)
 

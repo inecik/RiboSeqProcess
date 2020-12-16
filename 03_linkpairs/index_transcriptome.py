@@ -24,6 +24,7 @@ from archieve.common_functions import *
 
 # Check if necessary packages were installed.
 check_exist_package("bowtie2-build")
+ensembl_release = 102
 
 
 # CONSTANTS
@@ -42,7 +43,7 @@ if not os.access(path_fasta, os.R_OK) or not os.path.isfile(path_fasta):
     print("Database for human transcriptome is now downloading.")
     subprocess.run((
         f"cd {temp_module_dir};"  # Change the directory to the downloading directory
-        "curl -L -R -O ftp://ftp.ensembl.org/pub/release-100/"  # Curl FTP fetch
+        f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-{ensembl_release}/"  # Curl FTP fetch
         f"fasta/homo_sapiens/cdna/{DATABASE_FASTA}"), shell=True)  # .. remaining of the URL
 
 

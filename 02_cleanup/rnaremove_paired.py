@@ -53,7 +53,7 @@ bowtie2_run = subprocess.run((
     "--no-mixed "  # Do not search for individual pairs if one in a pair does not align.
     "-I20 -X120 " # Default -I=0, -X=500. Since I will disregard X>120 and I<20 in the link-pairing module
     "--time "  # Print the wall-clock time required to load the index files and align the reads.
-    "--score-min G,20,6 "  # Allow looser alignment.  --ma 3
+    "--score-min G,20,6 "  # Allow looser alignment. --ma 3 
     "--local --sensitive-local "  # Apply soft clipping when aligning. Default sensitivity.
     "-k1 "  # We are not interested in the best alignment as long as it aligns somewhere in the indexed fasta.
     f"-x {index_files} "  # Index directory with the base name

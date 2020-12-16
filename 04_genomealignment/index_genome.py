@@ -20,6 +20,7 @@ from archieve.common_functions import *
 TEMP_DATA_REPO = "04_genomealignment"
 GENOME_INDEX_DIR_NAME = "index_genome"
 ReadLength_minus_1 = 100  # Manual says: "In most cases, the default value of 100 will work as well as the ideal value."
+ensembl_release = 102
 
 
 # Inputs
@@ -43,7 +44,7 @@ except:
 
     # Download necessary genome files from the server
     fa = "Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
-    gtf = "Homo_sapiens.GRCh38.100.gtf.gz"
+    gtf = f"Homo_sapiens.GRCh38.{ensembl_release}.chr_patch_hapl_scaff.gtf.gz"
     fa_uncompressed = os.path.splitext(fa)[0]
     gtf_uncompressed = os.path.splitext(gtf)[0]
 
@@ -51,14 +52,14 @@ except:
     print("Human genome fasta file is being downloading from the server.")
     if not os.access(fa_uncompressed, os.R_OK) or not os.path.isfile(fa_uncompressed):
         if not os.access(fa, os.R_OK) or not os.path.isfile(fa):
-            subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-100/fasta/homo_sapiens/dna/{fa}", shell=True)
+            subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-{ensembl_release}/fasta/homo_sapiens/dna/{fa}", shell=True)
         subprocess.run(f"gzip -d {fa}", shell=True)  # Uncompress gz file
 
     # Download annotation file
     print("Human genome gtf file is being downloading from the server.")
     if not os.access(gtf_uncompressed, os.R_OK) or not os.path.isfile(gtf_uncompressed):
         if not os.access(gtf, os.R_OK) or not os.path.isfile(gtf):
-            subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-100/gtf/homo_sapiens/{gtf}", shell=True)
+            subprocess.run(f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-{ensembl_release}/gtf/homo_sapiens/{gtf}", shell=True)
         subprocess.run(f"gzip -d {gtf}", shell=True)  # Uncompress gz file
 
     # Genome index creation
