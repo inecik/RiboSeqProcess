@@ -187,7 +187,22 @@ def genomealignment_single(scripts_directory, read1, output_dir, temp_dir):
 
 
 def genomealignment_paired(scripts_directory, read1, read2, output_dir, temp_dir):
-    pass  # todo
+
+    print(f"{bcolors.HEADER}Genome Alignment Module.{bcolors.ENDC}")
+
+    spr = subprocess.run((
+        f"{which('python3')} "  # Define which python installation to use
+        f"{os.path.join(scripts_directory, '04_genomealignment/genome_alignment_paired.py')} "
+        f"{read1} "  # sys.argv[1]
+        f"{read2} "  # sys.argv[1]
+        f"{output_dir} "  # sys.argv[2]
+        f"{temp_dir}"  # sys.argv[3]
+    ), shell=True)
+
+    if spr.returncode != 0:
+        sys.exit(f"{bcolors.FAIL}Error in star_alignment_single.py: Exiting.{bcolors.ENDC}")
+
+    print(f"{bcolors.OKCYAN}Human genome alignment was successfully completed.\n{bcolors.ENDC}")
 
 
 def genomealignment_umidedup_single(scripts_directory, output_dir):
@@ -207,7 +222,18 @@ def genomealignment_umidedup_single(scripts_directory, output_dir):
 
 
 def genomealignment_umidedup_paired(scripts_directory, output_dir):
-    pass  # todo
+    print(f"{bcolors.HEADER}Genome Alignment UMI deduplication.{bcolors.ENDC}")
+
+    spr = subprocess.run((
+        f"{which('python3')} "  # Define which python installation to use
+        f"{os.path.join(scripts_directory, '04_genomealignment/umitools_dedup_paired.py')} "  # Relative script dir
+        f"{output_dir}"
+    ), shell=True)
+
+    if spr.returncode != 0:
+        sys.exit(f"{bcolors.FAIL}Error in umitools_dedup.py: Exiting.{bcolors.ENDC}")
+
+    print(f"{bcolors.OKCYAN}UMI deduplication was successfully completed.\n{bcolors.ENDC}")
 
 def assignment_ilia(scripts_directory, sam_file, output_dir, temp_dir):
 

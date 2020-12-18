@@ -44,30 +44,9 @@ if not os.access(path_fasta, os.R_OK) or not os.path.isfile(path_fasta):
     subprocess.run((
         f"cd {temp_module_dir};"  # Change the directory to the downloading directory
         f"curl -L -R -O ftp://ftp.ensembl.org/pub/release-{ensembl_release}/"  # Curl FTP fetch
-        f"fasta/homo_sapiens/cdna/{DATABASE_FASTA}"), shell=True)  # .. remaining of the URL
-
-
-# Filter the fasta file
-path_fasta_output = re.search(r"(.*)\.fa\.gz$", path_fasta).group(1) + "_filtered.fa"
-if not os.access(path_fasta_output, os.R_OK) or not os.path.isfile(path_fasta_output):
-    print("Database for human transcriptome is being filtered for protein coding RNAs.")
-    counter_total_fasta = 0  # Count the line in the file
-    counter_filtered_fasta = 0
-    with gzip.open(path_fasta, "rt") as handle:  # Open the gz file
-        with open(path_fasta_output, "wt") as output_handle:  # Open a file for output
-            for record in SeqIO.parse(handle, "fasta"):  # Read the fasta record by a function in Biopython package
-                counter_total_fasta += 1
-                # Keep only if the transcript is protein coding.
-                # Check: https://www.ensembl.org/info/genome/genebuild/biotypes.html
-                if re.search(r"\stranscript_biotype:protein_coding\s", record.description):
-                    SeqIO.write(record, output_handle, "fasta")
-                    counter_filtered_fasta += 1
-    # Write down the report
-    path_report_output = os.path.join(temp_module_dir, "report_ensembl_human_transcriptome.txt")
-    with open(path_report_output, "w") as output_handle:
-        fasta_string = f"Original fasta number of line:\t{counter_total_fasta}\n" \
-                       f"Filtered fasta number of line:\t{counter_filtered_fasta}\n"
-        output_handle.write(f"Filtering Report:\n\n{fasta_string}")
+        f"fasta/homo_sapiens/cdna/{DATABASE_FASTA}; "
+        f"gzip -d {path_fasta}"), shell=True)  # .. remaining of the URL
+path_fasta_output = re.search(r"(.*)\.fa\.gz$", path_fasta).group(1) + ".fa"
 
 
 # Run Bowtie2_build function in Bowtie2 module.

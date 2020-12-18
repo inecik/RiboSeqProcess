@@ -19,7 +19,7 @@ from Bio import SeqIO
 DATA_REPO = "03_linkpairs"  # Name of the database containing folder
 SAM_FILE = "prealignment.sam"  # Check bowtie2_prealignment.py
 OUTPUT_NAME = "footprints.fasta"
-TRANSC_FASTA = "03_linkpairs/Homo_sapiens.GRCh38.cdna.all_filtered.fa"  # Check database_transc._bowtie2.py
+TRANSC_FASTA = "03_linkpairs/Homo_sapiens.GRCh38.cdna.all.fa"  # Check database_transc._bowtie2.py
 
 
 # Operations for working environment and file name related operations
