@@ -65,12 +65,12 @@ elif selection in [2, 3]:
     read2 = sys.argv[5]
 
     # Module 01: Preprocessing
-    # preprocessing_paired(scripts_directory, read1, read2, output_dir, temp_dir)  # todo
+    preprocessing_paired(scripts_directory, read1, read2, output_dir, temp_dir)
 
     # Module 02: Cleanup
-    # cleanup_inputs = joblib.load(os.path.join(output_dir, ".01_preprocessing.joblib"))  # todo
-    # cleanup_create_index(scripts_directory, temp_dir)  # todo
-    # cleanup_paired(scripts_directory, cleanup_inputs[0], cleanup_inputs[1], output_dir, temp_dir)  # todo
+    cleanup_inputs = joblib.load(os.path.join(output_dir, ".01_preprocessing.joblib"))
+    cleanup_create_index(scripts_directory, temp_dir)
+    cleanup_paired(scripts_directory, cleanup_inputs[0], cleanup_inputs[1], output_dir, temp_dir)
 
     if selection == 2:  # No link pairs
 
