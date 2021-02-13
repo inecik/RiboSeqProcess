@@ -1,0 +1,8 @@
+> Coco_Mono1
+single
+/home/kai/KEMALINECIK/BukauData/coco/mono1.fastq.gz
+
+> Sixtymers_NoPK
+paired_linking
+/home/kai/KEMALINECIK/BukauData/sixtymers/noPK_R1.fastq.gz
+/home/kai/KEMALINECIK/BukauData/sixtymers/noPK_R2.fastq.gz

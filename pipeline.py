@@ -11,20 +11,64 @@ import joblib
 import multiprocessing
 import pysam
 import re
+import argparse
+import datetime
 
 
 # Authorship information
 __author__ = "Kemal İnecik"
 __license__ = "GPLv3"
-__version__ = "0.1"
+__version__ = "0.2"
 __maintainer__ = "Kemal İnecik"
 __email__ = "k.inecik@gmail.com"
 __status__ = "Development"
 
 
+def main():
+
+    a = argument_parser()
+
+    job_list = JobList(a.filepath)
+    job_list.confirm_job_list()
+    print(f"{Col.H}Operation started.{Col.E}")
+    controller = Controller(a.identifier, a.organism, a.ensembl_release, a.temp, a.output, job_list.jobs)
+    joblib.dump(controller, os.path.join(a.output, "pipeline_controller.joblib"))
+    print(f"{Col.H}Operation successfully ended.{Col.E}")
+
+def argument_parser():
+
+    parser = argparse.ArgumentParser(prog="pipeline.py",
+                                     description='The app description')  # todo
+
+    parser.add_argument("-r", type=str, dest="identifier",
+                        help="The identifier for this run, which will be the directory name for outputs.",
+                        required=False, default=datetime.datetime.now().strftime("Run_on_%Y_%m_%d_at_%H_%M_%S"))
+
+    parser.add_argument("-a", type=str, dest="organism",
+                        help="Organism of interest for the analysis.",
+                        required=False, default="homo_sapiens",
+                        choices=["homo_sapiens", "mus_musculus"],  # todo
+                        )
+
+    parser.add_argument("-e", type=int, dest="ensembl_release",
+                        help="Ensembl version to be used.",
+                        required=False, default=102)
+
+    parser.add_argument("-f", type=str, required=True, dest="filepath",
+                        help="File path for the task list.")
+
+    parser.add_argument("-t", type=str, required=True, dest="temp",
+                        help="Directory to be used for temporary files.")
+
+    parser.add_argument("-o", type=str, required=True, dest="output",
+                        help="Directory to be used for output files.")
+
+    return parser.parse_args()
+
+
 class JobList:
-    
-    PROCESS_MAP = {1: "01_Preprocessing",
+
+    process_map = {1: "01_Preprocessing",
                    2: "02_Cleanup",
                    3: "03_LinkingPairs",
                    4: "04_GenomeAlignment",
@@ -39,40 +83,25 @@ class JobList:
     default_processes_single = [1, 2, 4, 5]
     default_processes_paired_linking = [1, 2, 3, 4, 5]
     default_processes_paired = [1, 2, 4]
-
     proper_input_extensions = ["fastq.gz"]
-
-    example_jobs = {"Coco_Mono1": {"sequencing_method": "single",
-                                   "input_fastq": "/home/kai/KEMALINECIK/BukauData/coco/mono1.fastq.gz",
-                                   "adapter": default_adapter_single,
-                                   "pattern_umi": default_pattern_single,
-                                   "processes": default_processes_single
-                                   },
-                    "Sixtymers_NoPK1": {"sequencing_method": "paired_linking",
-                                        "input_fastq": ["/home/kai/KEMALINECIK/BukauData/data_60mer/01_Combined_Data/noPK_R1.fastq.gz",
-                                                        "/home/kai/KEMALINECIK/BukauData/data_60mer/01_Combined_Data/noPK_R2.fastq.gz"],
-                                        "adapter1": default_adapter1_paired,
-                                        "adapter2": default_adapter2_paired,
-                                        "pattern_umi1": default_pattern1_paired,
-                                        "pattern_umi2": default_pattern2_paired,
-                                        "processes": default_processes_paired_linking
-                                        }
-                    }
 
     def __init__(self, user_task_file):
         self.user_task_file = user_task_file
-        self.job_list = self.read_job_list(self.user_task_file)
+        self.jobs = self.read_job_list(self.user_task_file)
 
-
-    def read_job_list(self, file_path):
+    @staticmethod
+    def read_job_list(file_path):
 
         result = dict()
 
         with open(file_path, "r") as handle:
 
             for entry in [r.strip() for r in handle.read().split(">") if r.strip()]:
-                line = [r.strip() for r in entry.split(os.linesep) if r.strip()]
 
+                if entry.startswith("#"):
+                    continue
+
+                line = [r.strip() for r in entry.split(os.linesep) if r.strip()]
                 print_error_entry = Col.B + '\n'.join(line) + Col.E
 
                 if len(line[0].split()) != 1:
@@ -81,10 +110,14 @@ class JobList:
                     raise ValueError(f"Improper sequencing method:\n{print_error_entry}")
                 if not check_file(line[2], JobList.proper_input_extensions):
                     raise ValueError(f"Improper file or file extension method:\n{print_error_entry}")
+                if not os.path.isabs(line[2]):
+                    raise ValueError(f"File path has to be absolute:\n{print_error_entry}")
                 if line[1].startswith("paired") and not check_file(line[3], JobList.proper_input_extensions):
                     raise ValueError(f"Improper file or file extension method:\n{print_error_entry}")
+                if line[1].startswith("paired") and not os.path.isabs(line[3]):
+                    raise ValueError(f"File path has to be absolute:\n{print_error_entry}")
 
-                if line[1] == "single" :
+                if line[1] == "single":
                     temp_dict = {"sequencing_method": line[1],
                                  "input_fastq": line[2],
                                  "adapter": JobList.default_adapter_single,
@@ -92,7 +125,7 @@ class JobList:
                                  "processes": JobList.default_processes_single}
                 else:
                     process_temp = JobList.default_processes_paired if line[1] == "paired" \
-                        else JobList.default_processes_paired
+                        else JobList.default_processes_paired_linking
                     temp_dict = {"sequencing_method": line[1],
                                  "input_fastq": [line[2], line[3]],
                                  "adapter1": JobList.default_adapter1_paired,
@@ -101,51 +134,85 @@ class JobList:
                                  "pattern_umi2": JobList.default_pattern2_paired,
                                  "processes": process_temp}
 
-                non_default_entries = line[3:] if line[0] == "single" else line[4:]
-                if line[0] == "single":
+                non_default_entries = line[3:] if line[1] == "single" else line[4:]
+                if line[1] == "single":
                     possible_settings = ["adapter", "pattern_umi", "processes"]
                 else:
                     possible_settings = ["adapter1", "adapter2", "pattern_umi1", "pattern_umi2" "processes"]
                 for nde in non_default_entries:
                     des = [r.strip() for r in nde.split("=") if r.strip()]
-                    if len(des) != 2 and des[0] not in possible_settings:
+                    if len(des) != 2 or des[0] not in possible_settings:
                         print(f"{Col.W}Manual setting ignored for {line[0]}:\n{des}{Col.E}")
                     elif des[0] == "processes":
                         temp_dict[des[0]] = sorted([int(r.strip()) for r in des[1].split(',') if r.strip()])
                     else:
                         temp_dict[des[0]] = des[1] if des[1] != "None" else None
 
-                assert line[0] not in result
+                assert line[0] not in result, f"Duplicated key for {line[0]}"
                 result[line[0]] = temp_dict
 
         return result
 
     def confirm_job_list(self):
-        for job_id in self.job_list:
-            the_job = self.job_list[job_id]
+        print(f"{Col.H}Please confirm the jobs.\n"
+              f"Press enter to confirm, type anything to stop.\n"
+              f"There are {len(self.jobs)} jobs:{Col.E}\n")
+        for job_id in self.jobs:
+            the_job = self.jobs[job_id]
+            processes_pre = ", ".join([str(i) for i in the_job['processes']])
 
             if the_job["sequencing_method"] == "single":
 
                 adapter_temp = the_job["adapter"] if the_job["adapter"] != JobList.default_adapter_single \
-                    else f"Default ({the_job['adapter']})"
-                pattern_temp = the_job["pattern_umi"] if the_job["pattern_umi"] != JobList.default_adapter_single \
-                    else f"Default ({the_job['pattern_umi']})"
-                processes_pre = ", ".join([str(i) for i in the_job['processes']])
-                processes_temp = processes_pre if the_job["processes"] != JobList.default_adapter_single \
-                    else f"Default ({processes_pre})"
+                    else f"Default (\"{the_job['adapter']}\")"
+                pattern_temp = the_job["pattern_umi"] if the_job["pattern_umi"] != JobList.default_pattern_single \
+                    else f"Default (\"{the_job['pattern_umi']}\")"
+                processes_temp = processes_pre if the_job["processes"] != JobList.default_processes_single \
+                    else f"Default (\"{processes_pre}\")"
 
-                print_string = f""" 
-                {Col.H}> {job_id}{Col.C}
-                Sequencing Method: {the_job['sequencing_method']}
-                Read:              {the_job['input_fastq']}
-                Adapter:           {adapter_temp}
-                Pattern UMI:       {pattern_temp}
-                Processes:         {processes_temp}{Col.E}
-                """
-            
+                print_string = (
+                    f"{Col.H}> {job_id}{Col.C}{os.linesep}"
+                    f"Sequencing Method : {the_job['sequencing_method']}{os.linesep}"
+                    f"Read              : {the_job['input_fastq']}{os.linesep}"
+                    f"Adapter           : {adapter_temp}{os.linesep}"
+                    f"Pattern UMI       : {pattern_temp}{os.linesep}"
+                    f"Processes         : {processes_temp}{Col.E}{os.linesep}"
+                )
+
             else:
-                pass
 
+                adapter1_temp = the_job["adapter1"] if the_job["adapter1"] != JobList.default_adapter1_paired \
+                    else f"Default (\"{the_job['adapter1']}\")"
+                adapter2_temp = the_job["adapter2"] if the_job["adapter2"] != JobList.default_adapter2_paired \
+                    else f"Default (\"{the_job['adapter2']}\")"
+                pattern1_temp = the_job["pattern_umi1"] if the_job["pattern_umi1"] != JobList.default_pattern1_paired \
+                    else f"Default (\"{the_job['pattern_umi1']}\")"
+                pattern2_temp = the_job["pattern_umi2"] if the_job["pattern_umi2"] != JobList.default_pattern2_paired \
+                    else f"Default (\"{the_job['pattern_umi2']}\")"
+
+                processes_method = JobList.default_processes_paired if the_job["sequencing_method"] == "paired" \
+                    else JobList.default_processes_paired_linking
+                processes_temp = processes_pre if the_job["processes"] != processes_method \
+                    else f"Default (\"{processes_pre}\")"
+
+                print_string = (
+                    f"{Col.H}> {job_id}{Col.C}{os.linesep}"
+                    f"Sequencing Method : {the_job['sequencing_method']}{os.linesep}"
+                    f"Read 1            : {the_job['input_fastq'][0]}{os.linesep}"
+                    f"Read 2            : {the_job['input_fastq'][1]}{os.linesep}"
+                    f"Adapter 1         : {adapter1_temp}{os.linesep}"
+                    f"Adapter 2         : {adapter2_temp}{os.linesep}"
+                    f"Pattern UMI 1     : {pattern1_temp}{os.linesep}"
+                    f"Pattern UMI 2     : {pattern2_temp}{os.linesep}"
+                    f"Processes         : {processes_temp}{Col.E}{os.linesep}"
+                )
+
+            confirm = input(print_string)
+            if confirm != "":
+                print(f"{Col.F}Process terminated.{Col.E}")
+                sys.exit(1)
+            else:
+                print(f"{Col.W}Confirmed.\n{Col.E}")
 
 
 class Controller:
@@ -176,7 +243,7 @@ class Controller:
 
     def julia_assignment(self):
         for job_id in self.jobs:
-            if 5 in self.jobs[job_id]["processes"]:  # todo: önceki step yoksa olamıyor olsun
+            if 5 in self.jobs[job_id]["processes"]:
                 self.genome_alignment_one_job(job_id)
                 # No output path
 
@@ -185,7 +252,7 @@ class Controller:
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][5]  # 5'i açıkla
         input_sam = self.jobs[job_id]["process_genome_alignment"]
-        assert JobList.PROCESS_MAP[4].endswith("JuliaAssignment")
+        assert JobList.process_map[4].endswith("JuliaAssignment")
 
         subprocess.run((
             f"cd {job_dir}; "  # Change the directory to the directory
@@ -254,11 +321,11 @@ class Controller:
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][4]  # 4'i açıkla
         input_fastq_fasta = self.jobs[job_id]["process_linking_pairs"]
-        assert JobList.PROCESS_MAP[4].endswith("GenomeAlignment")
+        assert JobList.process_map[4].endswith("GenomeAlignment")
 
         if jobbing["sequencing_method"] in ["paired"]:  # note it down, not paired-linking
 
-            print(f"Genome alignment for {job_id} of {self.run_identifier} is now running.")
+            print(f"Genome alignment for {job_id} is now running.")
             prefix = "genome_alignment_"
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
@@ -291,7 +358,7 @@ class Controller:
 
             # Deduplication of UMI
             output_prefix = "umi-deduplicated"
-            print(f"UMI deduplication for {job_id} of {self.run_identifier} is now running.")
+            print(f"UMI deduplication for {job_id} is now running.")
             subprocess.run((  # Run deduplication
                 f"cd {job_dir}; "
                 f"{shutil.which('umi_tools')} dedup "  # Define which umi_tools installation to use
@@ -313,7 +380,7 @@ class Controller:
 
         elif jobbing["sequencing_method"] in ["single", "paired_linking"]:
 
-            print(f"Genome alignment for {job_id} of {self.run_identifier} is now running.")
+            print(f"Genome alignment for {job_id} is now running.")
             prefix = "genome_alignment_"
             subprocess.run((
                 f"cd {job_dir}; " 
@@ -346,7 +413,7 @@ class Controller:
 
             # Deduplication of UMI
             output_prefix = "umi-deduplicated"
-            print(f"UMI deduplication for {job_id} of {self.run_identifier} is now running.")
+            print(f"UMI deduplication for {job_id} is now running.")
             subprocess.run((  # Run deduplication
                 f"cd {job_dir}; "
                 f"{shutil.which('umi_tools')} dedup "  # Define which umi_tools installation to use
@@ -367,7 +434,7 @@ class Controller:
 
     def linking_pairs(self):
         for job_id in self.jobs:
-            if 3 in self.jobs[job_id]["processes"]:  # todo: single'da olamıyor olsun
+            if 3 in self.jobs[job_id]["processes"]:
                 self.linking_pairs_one_job(job_id)
             else:
                 self.jobs[job_id]["process_linking_pairs"] = self.jobs[job_id]["process_cleanup"]
@@ -377,9 +444,9 @@ class Controller:
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][3]  # 1'i açıkla
         temp_fastq = self.jobs[job_id]["process_cleanup"]
-        assert JobList.PROCESS_MAP[3].endswith("LinkingPairs")
+        assert JobList.process_map[3].endswith("LinkingPairs")
         sam_path = os.path.join(job_dir, "prealignment.sam")
-        print(f"Prealignment to link pairs for {job_id} of {self.run_identifier} is now running.")
+        print(f"Prealignment to link pairs for {job_id} is now running.")
         subprocess.run((
             f"cd {job_dir}; "  
             f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
@@ -459,11 +526,11 @@ class Controller:
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][2]  # 2'i açıkla
         temp_paths = self.jobs[job_id]["process_umitools"]
-        assert JobList.PROCESS_MAP[2].endswith("Cleanup")
+        assert JobList.process_map[2].endswith("Cleanup")
 
         if jobbing["sequencing_method"] in ["paired", "paired_linking"]:
             output_path = os.path.join(job_dir, "Read%_norRNA.fastq")
-            print(f"rRNA removal for {job_id} of {self.run_identifier} is now running.")
+            print(f"rRNA removal for {job_id} is now running.")
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
@@ -488,7 +555,7 @@ class Controller:
 
         elif jobbing["sequencing_method"] in ["single"]:
             output_path = os.path.join(job_dir, "Read1_norRNA.fastq")
-            print(f"rRNA removal for {job_id} of {self.run_identifier} is now running.")
+            print(f"rRNA removal for {job_id} is now running.")
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
@@ -531,13 +598,13 @@ class Controller:
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][1]  # 1'i açıkla
         temp_paths = self.jobs[job_id]["process_cutadapt"]
-        assert JobList.PROCESS_MAP[1].endswith("Preprocessing")
+        assert JobList.process_map[1].endswith("Preprocessing")
 
         if jobbing["sequencing_method"] in ["paired", "paired_linking"]:
             final_paths = [f"{i}_no-adapt_umi-aware.fastq.gz" for i in ["read1", "read2"]]
             final_paths = [os.path.join(job_dir, i) for i in final_paths]
             pattern1, pattern2 = jobbing["pattern_umi1"], jobbing["pattern_umi2"]
-            print(f"Umitool for {job_id} of {self.run_identifier} is now running.")
+            print(f"Umitool for {job_id} is now running.")
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('umi_tools')} extract "  # Define which extract installation to use
@@ -555,7 +622,7 @@ class Controller:
         elif jobbing["sequencing_method"] in ["single"]:
             final_path = os.path.join(job_dir, "read_1_no-adapt_umi-aware.fastq.gz")
             umitools_pattern = jobbing["pattern_umi"]
-            print(f"Umitool for {job_id} of {self.run_identifier} is now running.")
+            print(f"Umitool for {job_id} is now running.")
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('umi_tools')} extract "  # Define which extract installation to use
@@ -573,7 +640,7 @@ class Controller:
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][1]  # 1'i açıkla
         input_fastq = self.jobs[job_id]["input_fastq"]
-        assert JobList.PROCESS_MAP[1].endswith("Preprocessing")
+        assert JobList.process_map[1].endswith("Preprocessing")
 
         if jobbing["sequencing_method"] in ["paired", "paired_linking"]:
             # Outputs for the first run
@@ -582,7 +649,7 @@ class Controller:
             # Create flag if adapter is provided
             read1_adapter = f"-a {jobbing['adapter1']}" if jobbing['adapter1'] else ""
             read2_adapter = f"-A {jobbing['adapter2']}" if jobbing['adapter2'] else ""
-            print(f"Cutadapt for {job_id} of {self.run_identifier} is now running.")
+            print(f"Cutadapt for {job_id} is now running.")
             subprocess.run((
                     f"cd {job_dir}; "  # Change the directory to the index directory
                     f"{shutil.which('cutadapt')} "  # Define which cutadapt installation to use
@@ -602,7 +669,7 @@ class Controller:
 
         elif jobbing["sequencing_method"] in ["single"]:
             temp_path = os.path.join(job_dir, "read_1_cutadapt_temp.fastq.gz")  # Outputs for the first run
-            print(f"Cutadapt for {job_id} of {self.run_identifier} is now running.")
+            print(f"Cutadapt for {job_id} is now running.")
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('cutadapt')} "  # Define which cutadapt installation to use
@@ -624,9 +691,12 @@ class Controller:
         dir_run_identifier = create_dir(self.data_repo_dir, self.run_identifier)
         for job_id in self.jobs:
             dir_job = create_dir(dir_run_identifier, job_id)
-            self.jobs["processes_dirs"] = dict(zip(self.jobs["processes"],
-                                                   [create_dir(dir_job, JobList.PROCESS_MAP[process])
-                                                    for process in self.jobs["processes"]]))
+            try:
+                self.jobs[job_id]["processes_dirs"] = {process: create_dir(dir_job, JobList.process_map[process])
+                                                       for process in self.jobs[job_id]["processes"]}
+            except KeyError:
+                print(self.jobs)
+                raise KeyError
 
     def create_index(self):
         dir_base = create_dir(self.temp_repo_dir, self.organism)
@@ -730,7 +800,7 @@ class OrganismDatabase:
             self.dna = os.path.join(base_temp, dna_temp)
             # Transcriptome DNA fasta
             cdna_temp = "fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz"
-            self.dna = os.path.join(base_temp, cdna_temp)
+            self.cdna = os.path.join(base_temp, cdna_temp)
         elif self.organism == "mus_musculus":
             # Genome GTF
             gtf_temp = f"gtf/mus_musculus/Mus_musculus.GRCh38.{self.ensembl_release}.chr_patch_hapl_scaff.gtf.gz"
@@ -743,7 +813,7 @@ class OrganismDatabase:
             self.dna = os.path.join(base_temp, dna_temp)
             # Transcriptome DNA fasta
             cdna_temp = "fasta/mus_musculus/cdna/Mus_musculus.GRCm38.cdna.all.fa.gz"
-            self.dna = os.path.join(base_temp, cdna_temp)
+            self.cdna = os.path.join(base_temp, cdna_temp)
 
         rrna_base_temp = "ftp://ftp.ebi.ac.uk/pub/databases/RNAcentral/current_release"
         self.rrna_raw_fasta = os.path.join(rrna_base_temp, "/sequences/by-database/ena.fasta")
@@ -765,7 +835,7 @@ class OrganismDatabase:
     def _download_rna_central(self, db_url):
         output_path = os.path.join(self.repository, os.path.basename(db_url))
         if not os.access(output_path, os.R_OK) or not os.path.isfile(output_path):
-            print(f"Downloading from the server:\n{db_url}")
+            print(f"Downloading from the server for rrna:\n{db_url}")
             subprocess.run(f"cd {self.repository}; curl -L -R -O {db_url}", shell=True)
         return output_path
 
@@ -814,32 +884,8 @@ def create_dir(*args):
     return dir_path
 
 
-def progress_bar(iteration: int, total: int, prefix: str = 'Progress:', suffix: str = '', decimals: int = 1,
-                 bar_length: int = 20, verbose: bool = False):
-    """
-    This function should be called inside of loop, gives the loop's progress.
-    :param iteration: Current iteration.
-    :param total: Total iteration.
-    :param prefix: Placed before progress bar.
-    :param suffix: Placed after progress bar.
-    :param decimals: Number of decimals in percent complete.
-    :param bar_length: Character length of bar.
-    :param verbose: For convenience in some uses
-    :return: Void function. Nothing is returned.
-    """
-    if verbose:
-        filled_length = int(round(bar_length * iteration / float(total)))
-        percents = round(100.00 * (iteration / float(total)), decimals)
-        bar = '█' * filled_length + '-' * (bar_length - filled_length)
-        sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
-        sys.stdout.flush()
-        if iteration == total:
-            sys.stdout.write('\n')
-            sys.stdout.flush()
-
-
-def check_exist_package(pkgs):
-    for pkg in pkgs:
+def check_exist_package(packages):
+    for pkg in packages:
         if isinstance(pkg, str) and not shutil.which(pkg):
             raise ModuleNotFoundError(pkg)
 
@@ -877,6 +923,10 @@ def check_file(file_path, extensions):
     return os.path.isfile(file_path) and \
            os.access(file_path, os.R_OK) and \
            any([file_path.endswith(i) for i in extensions])
+
+
+if __name__ == '__main__':
+    main()
 
 
 # End
