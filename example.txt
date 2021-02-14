@@ -1,8 +1,24 @@
-> Coco_Mono1
+>>> Coco_Mono1
 single
 /home/kai/KEMALINECIK/BukauData/coco/mono1.fastq.gz
 
-> Sixtymers_NoPK
+>>> Sixtymers_Rep4
+paired
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep4_R1.fastq.gz
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep4_R2.fastq.gz
+adapter1 = AATATATATAGGCC
+
+>>> Sixtymers_Rep2
 paired_linking
-/home/kai/KEMALINECIK/BukauData/sixtymers/noPK_R1.fastq.gz
-/home/kai/KEMALINECIK/BukauData/sixtymers/noPK_R2.fastq.gz
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep2_R1.fastq.gz
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep2_R2.fastq.gz
+
+>>> Sixtymers_Rep1_NoBarcode
+paired_linking
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep1_R1.fastq.gz
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep1_R2.fastq.gz
+pattern_umi2 = ^(?P<umi_2>.{5}).*
+
+>>> Coco_Mono1
+single
+/home/kai/KEMALINECIK/BukauData/coco/mono1.fastq.gz

@@ -30,10 +30,10 @@ def main():
 
     job_list = JobList(a.filepath)
     job_list.confirm_job_list()
-    print(f"{Col.H}Operation started.\n{Col.E}")
-    controller = Controller(a.identifier, a.organism, a.ensembl_release, a.temp, a.output, job_list.jobs)
+    print(f"{Col.H}Operation started.{os.linesep}{Col.E}")
+    controller = Controller(a.identifier, a.organism, a.ensembl_release, a.cpu, a.temp, a.output, job_list.jobs)
     joblib.dump(controller, os.path.join(a.output, "pipeline_controller.joblib"))
-    print(f"{Col.H}Operation successfully ended.\n{Col.E}")
+    print(f"{Col.H}Operation successfully ended.{os.linesep}{Col.E}")
 
 def argument_parser():
 
@@ -53,6 +53,10 @@ def argument_parser():
     parser.add_argument("-e", type=int, dest="ensembl_release",
                         help="Ensembl version to be used.",
                         required=False, default=102)
+
+    parser.add_argument("-c", type=int, dest="cpu",
+                        help="Number of cpu cores to be used. Default is maximum minus 2.",
+                        required=False, default=multiprocessing.cpu_count() - 2)
 
     parser.add_argument("-f", type=str, required=True, dest="filepath",
                         help="File path for the task list.")
@@ -96,26 +100,28 @@ class JobList:
 
         with open(file_path, "r") as handle:
 
-            for entry in [r.strip() for r in handle.read().split(">") if r.strip()]:
+            for entry in [r.strip() for r in handle.read().split(">>>") if r.strip()]:
 
                 if entry.startswith("#"):
                     continue
 
-                line = [r.strip() for r in entry.split(os.linesep) if r.strip()]
-                print_error_entry = Col.B + '\n'.join(line) + Col.E
+                line = [r.strip() for r in entry.split(os.linesep) if r.strip() and not r.strip().startswith("#")]
+                print_error_entry = Col.B + os.linesep.join(line) + Col.E
+
+                # print(line)
 
                 if len(line[0].split()) != 1:
-                    raise ValueError(f"Improper key name:\n{print_error_entry}")
+                    raise ValueError(f"Improper key name:{os.linesep}{print_error_entry}")
                 if line[1] not in ["single", "paired_linking", "paired"]:
-                    raise ValueError(f"Improper sequencing method:\n{print_error_entry}")
+                    raise ValueError(f"Improper sequencing method:{os.linesep}{print_error_entry}")
                 if not check_file(line[2], JobList.proper_input_extensions):
-                    raise ValueError(f"Improper file or file extension method:\n{print_error_entry}")
+                    raise ValueError(f"Improper file or file extension method:{os.linesep}{print_error_entry}")
                 if not os.path.isabs(line[2]):
-                    raise ValueError(f"File path has to be absolute:\n{print_error_entry}")
+                    raise ValueError(f"File paths have to be absolute:{os.linesep}{print_error_entry}")
                 if line[1].startswith("paired") and not check_file(line[3], JobList.proper_input_extensions):
-                    raise ValueError(f"Improper file or file extension method:\n{print_error_entry}")
+                    raise ValueError(f"Improper file or file extension method:{os.linesep}{print_error_entry}")
                 if line[1].startswith("paired") and not os.path.isabs(line[3]):
-                    raise ValueError(f"File path has to be absolute:\n{print_error_entry}")
+                    raise ValueError(f"File paths have to be absolute:{os.linesep}{print_error_entry}")
 
                 if line[1] == "single":
                     temp_dict = {"sequencing_method": line[1],
@@ -138,11 +144,11 @@ class JobList:
                 if line[1] == "single":
                     possible_settings = ["adapter", "pattern_umi", "processes"]
                 else:
-                    possible_settings = ["adapter1", "adapter2", "pattern_umi1", "pattern_umi2" "processes"]
+                    possible_settings = ["adapter1", "adapter2", "pattern_umi1", "pattern_umi2", "processes"]
                 for nde in non_default_entries:
                     des = [r.strip() for r in nde.split("=") if r.strip()]
                     if len(des) != 2 or des[0] not in possible_settings:
-                        print(f"{Col.W}Manual setting ignored for {line[0]}:\n{des}{Col.E}")
+                        print(f"{Col.W}Manual setting ignored for {line[0]}:{os.linesep}{des}{Col.E}")
                     elif des[0] == "processes":
                         temp_dict[des[0]] = sorted([int(r.strip()) for r in des[1].split(',') if r.strip()])
                     else:
@@ -154,9 +160,9 @@ class JobList:
         return result
 
     def confirm_job_list(self):
-        print(f"{Col.H}Please confirm the jobs.\n"
-              f"Press enter to confirm, type anything to stop.\n"
-              f"There are {len(self.jobs)} jobs:{Col.E}\n")
+        print(f"{Col.H}Please confirm the jobs.{os.linesep}"
+              f"Press enter to confirm, type anything to stop.{os.linesep}"
+              f"There are {len(self.jobs)} jobs:{Col.E}{os.linesep}")
         for job_id in self.jobs:
             the_job = self.jobs[job_id]
             processes_pre = ", ".join([str(i) for i in the_job['processes']])
@@ -212,12 +218,12 @@ class JobList:
                 print(f"{Col.F}Process terminated.{Col.E}")
                 sys.exit(1)
             else:
-                print(f"{Col.W}Confirmed.\n{Col.E}")
+                print(f"{Col.W}Confirmed.{os.linesep}{Col.E}")
 
 
 class Controller:
 
-    def __init__(self, run_identifier, organism, ensembl_release, temp_repo_dir, data_repo_dir, jobs):
+    def __init__(self, run_identifier, organism, ensembl_release, cpu_cores, temp_repo_dir, data_repo_dir, jobs):
 
         check_directory([temp_repo_dir, data_repo_dir])
         check_exist_package(["cutadapt", "umi_tools", "bowtie2-build", "STAR", "bowtie2", "/usr/bin/samtools"])
@@ -229,7 +235,7 @@ class Controller:
         self.jobs = jobs
         self.run_identifier = run_identifier
         self.org_db = OrganismDatabase(self.organism, self.ensembl_release, self.temp_repo_dir)
-        self.cpu = multiprocessing.cpu_count()
+        self.cpu = cpu_cores
 
         self.julia_path = os.path.join(os.path.dirname(__file__), "julia_assignment.jl")
         self.create_output_tree()
@@ -330,7 +336,7 @@ class Controller:
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('STAR')} "  # Define which star installation to use
-                f"--runThreadN {self.cpu - 2} "  # Define how many core to be used. All cores are now using
+                f"--runThreadN {self.cpu} "  # Define how many core to be used. All cores are now using
                 f"--genomeDir {self.index_directories['index_dna']} "
                 f"--readFilesIn {input_fastq_fasta[0]} {input_fastq_fasta[1]} "
                 # All parameters were inherited from Mati-Kai's pipeline.
@@ -385,7 +391,7 @@ class Controller:
             subprocess.run((
                 f"cd {job_dir}; " 
                 f"{shutil.which('STAR')} "  # Define which star installation to use
-                f"--runThreadN {self.cpu - 2} "  # Define how many core to be used. All cores are now using
+                f"--runThreadN {self.cpu} "  # Define how many core to be used. All cores are now using
                 f"--genomeDir {self.index_directories['index_dna']} "
                 f"--readFilesIn {input_fastq_fasta} "
                 # All parameters were inherited from Mati-Kai's pipeline.
@@ -451,11 +457,12 @@ class Controller:
             f"cd {job_dir}; "  
             f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
             "-D 40 -R 6 -N 0 -L 15 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
+            # Add warning!
             "-I20 -X120 "  # Search only those that has 20-120 nt. 
             "--score-min G,20,5.5 "  # Min score lowered
             "--ma 3 --mp 5,1 "  # ma bonus increased
             "--no-unal "  # To suppress the non-aligned reads
-            f"-p{self.cpu - 2} "  # Number of core to use
+            f"-p{self.cpu} "  # Number of core to use
             "--no-discordant "  # Filter pairs does not obey orientation/length constraints 
             "--no-mixed "  # Do not search for individual pairs if one in a pair does not align.
             "--local "  # Indicate the alignment is local. Soft clipping will be applied.
@@ -534,11 +541,12 @@ class Controller:
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
-                f"-p{self.cpu - 2} "  # Number of core to use
+                f"-p{self.cpu} "  # Number of core to use
                 "--no-mixed "  # Do not search for individual pairs if one in a pair does not align.
+                # Add warning!
                 "-I20 -X120 "  # Default -I=0, -X=500. Since I will disregard X>120 and I<20 in the link-pairing module
                 "--time "  # Print the wall-clock time required to load the index files and align the reads.
-                "--score-min G,20,6 "  # Allow looser alignment. --ma 3 
+                "--score-min G,20,6 --ma 4 "  # Allow looser alignment. --ma 3 
                 "--local --sensitive-local "  # Apply soft clipping when aligning. Default sensitivity.
                 "-k1 "  # We are not interested in best alignment as long as it aligns somewhere in the indexed fasta.
                 f"-x {self.index_directories['index_rrna']} "  # Index directory with the base name
@@ -546,6 +554,7 @@ class Controller:
                 f"-1 {temp_paths[0]} "  # Read 1
                 f"-2 {temp_paths[1]} "  # Read 2
                 f"--un-conc {output_path} "  # Output fastq file, Contains all reads which did not aligned RNAs. 
+                f"--al-conc {os.path.join(job_dir, 'Read%_only_rRNA.fastq')} "  # For testing purposes
                 "-S /dev/null "  # Discard alignment sam file /dev/null
                 f"2> report_cleanup.log"
             ), shell=True)
@@ -559,15 +568,16 @@ class Controller:
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
-                f"-p{self.cpu - 2} "  # Number of core to use
+                f"-p{self.cpu} "  # Number of core to use
                 "--time "  # Print the wall-clock time required to load the index files and align the reads.
-                "--score-min G,20,6 "  # Allow looser alignment.  --ma 3 
+                "--score-min G,20,6  --ma 4 "  # Allow looser alignment.  --ma 3 
                 "--local --sensitive-local "  # Apply soft clipping when aligning. Default sensitivity.
                 "-k1 "  # We are not interested in best alignment as long as it aligns somewhere in the indexed fasta.
                 f"-x {self.index_directories['index_rrna']} "  # Index directory with the base name
                 "-q "  # Indicates the inputs are fastq
                 f"{temp_paths} "  # Read 1
                 f"--un {output_path} "  # Output fastq file, Contains all reads which did not aligned RNAs. 
+                f"--al {os.path.join(job_dir, 'Read1_only_rRNA.fastq')} "  # For testing purposes
                 "-S /dev/null "  # Discard alignment sam file /dev/null
                 f"2> report_rnaremove.txt"
             ), shell=True)
@@ -584,8 +594,9 @@ class Controller:
             self.jobs[job_id]["process_cutadapt"] = self.jobs[job_id]["input_fastq"]
             self.jobs[job_id]["process_umitools"] = self.jobs[job_id]["input_fastq"]
 
+
     def preprocessing_umitools_multiprocessing(self, job_id_list):
-        assert len(self.jobs) <= self.cpu - 2
+        assert len(self.jobs) <= self.cpu
         executor = multiprocessing.Pool(len(self.jobs))
         result = executor.map(self.preprocessing_umitools, job_id_list)
         executor.terminate()
@@ -620,7 +631,7 @@ class Controller:
             return final_paths
 
         elif jobbing["sequencing_method"] in ["single"]:
-            final_path = os.path.join(job_dir, "read_1_no-adapt_umi-aware.fastq.gz")
+            final_path = os.path.join(job_dir, "read1_no-adapt_umi-aware.fastq.gz")
             umitools_pattern = jobbing["pattern_umi"]
             print(f"Umitool for {job_id} is now running.")
             subprocess.run((
@@ -653,7 +664,7 @@ class Controller:
             subprocess.run((
                     f"cd {job_dir}; "  # Change the directory to the index directory
                     f"{shutil.which('cutadapt')} "  # Define which cutadapt installation to use
-                    f"--cores={self.cpu - 2} "  # Define how many core to be used. All cores are now using
+                    f"--cores={self.cpu} "  # Define how many core to be used. All cores are now using
                     "--match-read-wildcards "
                     f"-q20 -m23 "  # Settings for quality and minimum length to cut the adapter sequence
                     # todo: explain why: check the photo taken in 12 february
@@ -668,12 +679,12 @@ class Controller:
             self.jobs[job_id]["process_cutadapt"] = temp_paths
 
         elif jobbing["sequencing_method"] in ["single"]:
-            temp_path = os.path.join(job_dir, "read_1_cutadapt_temp.fastq.gz")  # Outputs for the first run
+            temp_path = os.path.join(job_dir, "read1_cutadapt_temp.fastq.gz")  # Outputs for the first run
             print(f"Cutadapt for {job_id} is now running.")
             subprocess.run((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('cutadapt')} "  # Define which cutadapt installation to use
-                f"--cores={self.cpu - 2} "  # Define how many core to be used. All cores are now using
+                f"--cores={self.cpu} "  # Define how many core to be used. All cores are now using
                 "--match-read-wildcards "
                 f"-q20 -m23 "  # Settings for quality and minimum length to cut the adapter sequence
                 # If we don't below two, UMI tool definitely malfunction
@@ -709,7 +720,7 @@ class Controller:
             subprocess.run((
                 f"cd {dir_cdna}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2-build')} "  # Name of the function
-                f"--threads {self.cpu - 2} "  # Number of threads to be used.
+                f"--threads {self.cpu} "  # Number of threads to be used.
                 f"{temp_cdna_fasta} "  # Input file. -f is to indicate the file is in fasta format
                 f"{index_name_cdna} "  # The basename of the index files to write
                 f"> report_{self.organism}_cdna.log"
@@ -723,7 +734,7 @@ class Controller:
             subprocess.run((
                 f"cd {dir_rrna}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2-build')} "  # Name of the function
-                f"--threads {self.cpu - 2} "  # Number of threads to be used.
+                f"--threads {self.cpu} "  # Number of threads to be used.
                 f"{temp_rrna_fasta} "  # Input file. -f is to indicate the file is in fasta format
                 f"{index_name_rrna} "  # The basename of the index files to write
                 f"> report_{self.organism}_rrna.log"
@@ -740,7 +751,7 @@ class Controller:
             subprocess.run((
                 f"cd {dir_dna}; "  # Change the directory to the index directory
                 f"{shutil.which('STAR')} "  # Define which star installation to use
-                f"--runThreadN {self.cpu - 2} "  # Define how many core to be used. All cores are now using
+                f"--runThreadN {self.cpu} "  # Define how many core to be used. All cores are now using
                 "--runMode genomeGenerate "
                 f"--genomeDir {dir_dna} "  # Directory to save the files
                 f"--genomeFastaFiles {temp_dna_fasta} "  # Specifies FASTA file with the genome reference sequences
@@ -824,7 +835,7 @@ class OrganismDatabase:
         output_path_compressed = os.path.join(self.repository, os.path.basename(db_url))
         output_path_uncompressed = os.path.splitext(output_path_compressed)[0]
         if not os.access(output_path_uncompressed, os.R_OK) or not os.path.isfile(output_path_uncompressed):
-            print(f"Downloading from the server for {db}:\n{db_url}")
+            print(f"Downloading from the server for {db}:{os.linesep}{db_url}")
             if not os.access(output_path_compressed, os.R_OK) or not os.path.isfile(output_path_compressed):
                 subprocess.run(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
             subprocess.run(f"cd {self.repository}; gzip -d -q {output_path_compressed}", shell=True)
@@ -833,7 +844,7 @@ class OrganismDatabase:
     def _download_rna_central(self, db_url):
         output_path = os.path.join(self.repository, os.path.basename(db_url))
         if not os.access(output_path, os.R_OK) or not os.path.isfile(output_path):
-            print(f"Downloading from the server for rrna:\n{db_url}")
+            print(f"Downloading from the server for rrna:{os.linesep}{db_url}")
             subprocess.run(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
         return output_path
 
