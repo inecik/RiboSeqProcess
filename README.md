@@ -1,2 +1,3 @@
-# Ribo-seq-Analysis
-Ribosome profiling analysis
+# RiboSeqAnalysis
+
+Explanation will be here!
