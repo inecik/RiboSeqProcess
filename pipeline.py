@@ -30,10 +30,10 @@ def main():
 
     job_list = JobList(a.filepath)
     job_list.confirm_job_list()
-    print(f"{Col.H}Operation started.{Col.E}")
+    print(f"{Col.H}Operation started.\n{Col.E}")
     controller = Controller(a.identifier, a.organism, a.ensembl_release, a.temp, a.output, job_list.jobs)
     joblib.dump(controller, os.path.join(a.output, "pipeline_controller.joblib"))
-    print(f"{Col.H}Operation successfully ended.{Col.E}")
+    print(f"{Col.H}Operation successfully ended.\n{Col.E}")
 
 def argument_parser():
 
@@ -691,12 +691,8 @@ class Controller:
         dir_run_identifier = create_dir(self.data_repo_dir, self.run_identifier)
         for job_id in self.jobs:
             dir_job = create_dir(dir_run_identifier, job_id)
-            try:
-                self.jobs[job_id]["processes_dirs"] = {process: create_dir(dir_job, JobList.process_map[process])
-                                                       for process in self.jobs[job_id]["processes"]}
-            except KeyError:
-                print(self.jobs)
-                raise KeyError
+            self.jobs[job_id]["processes_dirs"] = {process: create_dir(dir_job, JobList.process_map[process])
+                                                   for process in self.jobs[job_id]["processes"]}
 
     def create_index(self):
         dir_base = create_dir(self.temp_repo_dir, self.organism)
@@ -708,7 +704,7 @@ class Controller:
         index_name_rrna = f"{self.organism}_rrna"
 
         if not self.create_index_search_metadata(dir_cdna):
-            print("Indexing for cDNAs is being calculated.")
+            print("Indexing for cDNA is being calculated.")
             temp_cdna_fasta = self.org_db.get_db("cdna")
             subprocess.run((
                 f"cd {dir_cdna}; "  # Change the directory to the index directory
@@ -722,7 +718,7 @@ class Controller:
             joblib.dump(metadata_index, os.path.join(dir_cdna, ".metadata.joblib"))
 
         if not self.create_index_search_metadata(dir_rrna):
-            print("Indexing for rRNAs is being calculated.")
+            print("Indexing for rRNA is being calculated.")
             temp_rrna_fasta = self.org_db.get_db("rrna")
             subprocess.run((
                 f"cd {dir_rrna}; "  # Change the directory to the index directory
@@ -788,6 +784,7 @@ class OrganismDatabase:
         self.repository = create_dir(self.temp_repo_dir, self.organism)
 
         base_temp = f"ftp://ftp.ensembl.org/pub/release-{ensembl_release}"
+        
         if self.organism == "homo_sapiens":
             # Genome GTF
             gtf_temp = f"gtf/homo_sapiens/Homo_sapiens.GRCh38.{self.ensembl_release}.chr_patch_hapl_scaff.gtf.gz"
@@ -801,6 +798,7 @@ class OrganismDatabase:
             # Transcriptome DNA fasta
             cdna_temp = "fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz"
             self.cdna = os.path.join(base_temp, cdna_temp)
+        
         elif self.organism == "mus_musculus":
             # Genome GTF
             gtf_temp = f"gtf/mus_musculus/Mus_musculus.GRCh38.{self.ensembl_release}.chr_patch_hapl_scaff.gtf.gz"
@@ -816,7 +814,7 @@ class OrganismDatabase:
             self.cdna = os.path.join(base_temp, cdna_temp)
 
         rrna_base_temp = "ftp://ftp.ebi.ac.uk/pub/databases/RNAcentral/current_release"
-        self.rrna_raw_fasta = os.path.join(rrna_base_temp, "/sequences/by-database/ena.fasta")
+        self.rrna_raw_fasta = os.path.join(rrna_base_temp, "sequences/by-database/ena.fasta")
         self.rrna_raw_information = os.path.join(rrna_base_temp, "id_mapping/database_mappings/ena.tsv")
 
     def get_db(self, db):
@@ -828,15 +826,15 @@ class OrganismDatabase:
         if not os.access(output_path_uncompressed, os.R_OK) or not os.path.isfile(output_path_uncompressed):
             print(f"Downloading from the server for {db}:\n{db_url}")
             if not os.access(output_path_compressed, os.R_OK) or not os.path.isfile(output_path_compressed):
-                subprocess.run(f"cd {self.repository}; curl -L -R -O {db_url}", shell=True)
-            subprocess.run(f"cd {self.repository}; gzip -d {output_path_compressed}", shell=True)
+                subprocess.run(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
+            subprocess.run(f"cd {self.repository}; gzip -d -q {output_path_compressed}", shell=True)
         return output_path_uncompressed
 
     def _download_rna_central(self, db_url):
         output_path = os.path.join(self.repository, os.path.basename(db_url))
         if not os.access(output_path, os.R_OK) or not os.path.isfile(output_path):
             print(f"Downloading from the server for rrna:\n{db_url}")
-            subprocess.run(f"cd {self.repository}; curl -L -R -O {db_url}", shell=True)
+            subprocess.run(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
         return output_path
 
     def _filter_rrna(self):
