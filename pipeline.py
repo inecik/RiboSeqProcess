@@ -83,11 +83,11 @@ class JobList:
     default_adapter2_paired = None
     default_pattern_single = "^(?P<umi_1>.{2}).*(?P<umi_2>.{5})$"
     default_pattern1_paired = "^(?P<umi_1>.{2}).*"
-    default_pattern2_paired = ".*(?P<umi_2>.{5})(?P<discard_2>.{5})$"
+    default_pattern2_paired = "^(?P<discard_2>.{5})(?P<umi_2>.{5}).*"  # ".*(?P<umi_2>.{5})(?P<discard_2>.{5})$"
     default_processes_single = [1, 2, 4, 5]
     default_processes_paired_linking = [1, 2, 3, 4, 5]
     default_processes_paired = [1, 2, 4]
-    proper_input_extensions = ["fastq.gz"]
+    proper_input_extensions = ["fastq.gz"]  # todo:çünkü sadece 5'i çalıştıracaksan sam, sadece 4'se bazen
 
     def __init__(self, user_task_file):
         self.user_task_file = user_task_file
@@ -248,12 +248,13 @@ class Controller:
         self.julia_assignment()
 
     def julia_assignment(self):
+        gff_path = self.julia_assignment_gff3_correct()
         for job_id in self.jobs:
             if 5 in self.jobs[job_id]["processes"]:
-                self.genome_alignment_one_job(job_id)
+                self.julia_assignment_one_job(job_id)
                 # No output path
 
-    def julia_assignment_one_job(self, job_id):
+    def julia_assignment_one_job(self, job_id, gff_path):
 
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][5]  # 5'i açıkla
@@ -263,7 +264,7 @@ class Controller:
         subprocess.run((
             f"cd {job_dir}; "  # Change the directory to the directory
             f"{shutil.which('julia')} {self.julia_path} "  # Which Julia installation to use and the script
-            f"-g {self.julia_assignment_gff3_correct()} "  # Gff3 file. Removed of duplicated gene names
+            f"-g {gff_path} "  # Gff3 file. Removed of duplicated gene names
             "-a 3 "  # Assignment from 3'
             # "-u "  # Inherited from Mati. Removed because umi-tool deduplication is already done.
             f"-o {job_dir} {input_sam}"  # Output file & Input file
@@ -485,7 +486,6 @@ class Controller:
         output_fasta = os.path.join(job_dir, "footprints.fasta")
 
         # Processing the SAM file
-        print("Processing the SAM file.")
         with open(output_fasta, "w") as output_handle:  # Open output fasta file
             popup_dict = dict()
             with pysam.AlignmentFile(sam_path, "r") as sam_handle:  # Open sam file
@@ -554,7 +554,7 @@ class Controller:
                 f"-1 {temp_paths[0]} "  # Read 1
                 f"-2 {temp_paths[1]} "  # Read 2
                 f"--un-conc {output_path} "  # Output fastq file, Contains all reads which did not aligned RNAs. 
-                f"--al-conc {os.path.join(job_dir, 'Read%_only_rRNA.fastq')} "  # For testing purposes
+                # f"--al-conc {os.path.join(job_dir, 'Read%_only_rRNA.fastq')} "  # For testing purposes
                 "-S /dev/null "  # Discard alignment sam file /dev/null
                 f"2> report_cleanup.log"
             ), shell=True)
@@ -577,7 +577,7 @@ class Controller:
                 "-q "  # Indicates the inputs are fastq
                 f"{temp_paths} "  # Read 1
                 f"--un {output_path} "  # Output fastq file, Contains all reads which did not aligned RNAs. 
-                f"--al {os.path.join(job_dir, 'Read1_only_rRNA.fastq')} "  # For testing purposes
+                # f"--al {os.path.join(job_dir, 'Read1_only_rRNA.fastq')} "  # For testing purposes
                 "-S /dev/null "  # Discard alignment sam file /dev/null
                 f"2> report_rnaremove.txt"
             ), shell=True)
