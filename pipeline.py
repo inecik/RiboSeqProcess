@@ -30,8 +30,11 @@ def main():
 
     job_list = JobList(a.filepath)
     job_list.confirm_job_list()
+    
     print(f"{Col.H}Operation started.{os.linesep}{Col.E}")
-    controller = Controller(a.identifier, a.organism, a.ensembl_release, a.cpu, a.temp, a.output, job_list.jobs)
+    controller = Controller(a.identifier, a.organism, a.ensembl_release, a.cpu, a.temp, a.output, a.assignment, job_list.jobs)
+    controller.start_processing()
+    
     joblib.dump(controller, os.path.join(a.output, "pipeline_controller.joblib"))
     print(f"{Col.H}Operation successfully ended.{os.linesep}{Col.E}")
 
@@ -57,6 +60,12 @@ def argument_parser():
     parser.add_argument("-c", type=int, dest="cpu",
                         help="Number of cpu cores to be used. Default is maximum minus 2.",
                         required=False, default=multiprocessing.cpu_count() - 2)
+
+    parser.add_argument("-s", type=int, dest="assignment",
+                        help="Select for 3' or 5' assignment.",
+                        required=False, default=3,
+                        choices=[3, 5]
+                        )
 
     parser.add_argument("-f", type=str, required=True, dest="filepath",
                         help="File path for the task list.")
@@ -223,7 +232,7 @@ class JobList:
 
 class Controller:
 
-    def __init__(self, run_identifier, organism, ensembl_release, cpu_cores, temp_repo_dir, data_repo_dir, jobs):
+    def __init__(self, run_identifier, organism, ensembl_release, cpu_cores, temp_repo_dir, data_repo_dir, assign_from, jobs):
 
         check_directory([temp_repo_dir, data_repo_dir])
         check_exist_package(["cutadapt", "umi_tools", "bowtie2-build", "STAR", "bowtie2", "/usr/bin/samtools"])
@@ -236,10 +245,20 @@ class Controller:
         self.run_identifier = run_identifier
         self.org_db = OrganismDatabase(self.organism, self.ensembl_release, self.temp_repo_dir)
         self.cpu = cpu_cores
-
+        self.assign_from = assign_from
         self.julia_path = os.path.join(os.path.dirname(__file__), "julia_assignment.jl")
+        assert check_file(self.julia_path, [".jl"]), f"JuliaAssignment script could not be found.{os.linesep}{self.julia_path}"
+
         self.create_output_tree()
         self.index_directories = self.create_index()
+
+    def is_already_calculated(self):
+        pass # todo:
+        # normalde dir'e metadata bıraksın.
+        # eğer değiştirilmemişse skip etsin, similar to index..
+        # doğrudan yükleyince, print doğrudan yüklediğini. aynısını index'e de yap
+
+    def start_processing(self):
 
         self.preprocessing()
         self.cleanup()
@@ -251,7 +270,7 @@ class Controller:
         gff_path = self.julia_assignment_gff3_correct()
         for job_id in self.jobs:
             if 5 in self.jobs[job_id]["processes"]:
-                self.julia_assignment_one_job(job_id)
+                self.julia_assignment_one_job(job_id, gff_path)
                 # No output path
 
     def julia_assignment_one_job(self, job_id, gff_path):
@@ -259,13 +278,13 @@ class Controller:
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][5]  # 5'i açıkla
         input_sam = self.jobs[job_id]["process_genome_alignment"]
-        assert JobList.process_map[4].endswith("JuliaAssignment")
+        assert JobList.process_map[5].endswith("JuliaAssignment")
 
-        subprocess.run((
+        run_and_check((
             f"cd {job_dir}; "  # Change the directory to the directory
             f"{shutil.which('julia')} {self.julia_path} "  # Which Julia installation to use and the script
             f"-g {gff_path} "  # Gff3 file. Removed of duplicated gene names
-            "-a 3 "  # Assignment from 3'
+            f"-a {self.assign_from} "  # Assignment from 3'
             # "-u "  # Inherited from Mati. Removed because umi-tool deduplication is already done.
             f"-o {job_dir} {input_sam}"  # Output file & Input file
         ), shell=True)
@@ -329,12 +348,12 @@ class Controller:
         job_dir = jobbing["processes_dirs"][4]  # 4'i açıkla
         input_fastq_fasta = self.jobs[job_id]["process_linking_pairs"]
         assert JobList.process_map[4].endswith("GenomeAlignment")
+        prefix = "genome_alignment_"
 
         if jobbing["sequencing_method"] in ["paired"]:  # note it down, not paired-linking
 
             print(f"Genome alignment for {job_id} is now running.")
-            prefix = "genome_alignment_"
-            subprocess.run((
+            run_and_check((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('STAR')} "  # Define which star installation to use
                 f"--runThreadN {self.cpu} "  # Define how many core to be used. All cores are now using
@@ -356,40 +375,44 @@ class Controller:
             ), shell=True)
             raw_bam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.bam")
 
-            after_sort = os.path.splitext(raw_bam)[0] + '_sorted.bam'
-            subprocess.run((  # Sort bam file and Index
-                f"cd {job_dir}; "
-                f"{shutil.which('/usr/bin/samtools')} sort {raw_bam} -o {after_sort}; " 
-                f"{shutil.which('/usr/bin/samtools')} index {after_sort}"
-            ), shell=True)
+            if not jobbing["umitools_extract"]:
+                raw_sam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.sam")
+                run_and_check(f"cd {job_dir}; {shutil.which('/usr/bin/samtools')} view -h -o {raw_sam} {raw_bam}",
+                              shell=True)
+                self.jobs[job_id]["process_genome_alignment"] = raw_sam
+            else:
+                after_sort = os.path.splitext(raw_bam)[0] + '_sorted.bam'
+                run_and_check((  # Sort bam file and Index
+                    f"cd {job_dir}; "
+                    f"{shutil.which('/usr/bin/samtools')} sort {raw_bam} -o {after_sort}; "
+                    f"{shutil.which('/usr/bin/samtools')} index {after_sort}"
+                ), shell=True)
 
-            # Deduplication of UMI
-            output_prefix = "umi-deduplicated"
-            print(f"UMI deduplication for {job_id} is now running.")
-            subprocess.run((  # Run deduplication
-                f"cd {job_dir}; "
-                f"{shutil.which('umi_tools')} dedup "  # Define which umi_tools installation to use
-                f"-I {after_sort} "  # Input
-                f"--output-stats={output_prefix} "
-                f"--paired "
-                f"--unpaired-reads discard "
-                f"-S {output_prefix}.bam "
-                f"> report_{output_prefix}.log"
-            ), shell=True)
+                # Deduplication of UMI
+                output_prefix = "umi-deduplicated"
+                print(f"UMI deduplication for {job_id} is now running.")
+                run_and_check((  # Run deduplication
+                    f"cd {job_dir}; "
+                    f"{shutil.which('umi_tools')} dedup "  # Define which umi_tools installation to use
+                    f"-I {after_sort} "  # Input
+                    f"--output-stats={output_prefix} "
+                    f"--paired "
+                    f"--unpaired-reads discard "
+                    f"-S {output_prefix}.bam "
+                    f"> report_{output_prefix}.log"
+                ), shell=True)
 
-            subprocess.run((  # Convert to sam file
-                f"cd {job_dir}; "
-                f"{shutil.which('/usr/bin/samtools')} view -h "  # Define which samtools installation to use
-                f"-o {output_prefix}.sam {output_prefix}.bam"  # Output & Input
-            ), shell=True)
-
-            self.jobs[job_id]["process_genome_alignment"] = os.path.join(job_dir, f"{output_prefix}.sam")
+                run_and_check((  # Convert to sam file
+                    f"cd {job_dir}; "
+                    f"{shutil.which('/usr/bin/samtools')} view -h "  # Define which samtools installation to use
+                    f"-o {output_prefix}.sam {output_prefix}.bam"  # Output & Input
+                ), shell=True)
+                self.jobs[job_id]["process_genome_alignment"] = os.path.join(job_dir, f"{output_prefix}.sam")
 
         elif jobbing["sequencing_method"] in ["single", "paired_linking"]:
 
             print(f"Genome alignment for {job_id} is now running.")
-            prefix = "genome_alignment_"
-            subprocess.run((
+            run_and_check((
                 f"cd {job_dir}; " 
                 f"{shutil.which('STAR')} "  # Define which star installation to use
                 f"--runThreadN {self.cpu} "  # Define how many core to be used. All cores are now using
@@ -411,33 +434,39 @@ class Controller:
             ), shell=True)
             raw_bam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.bam")
 
-            after_sort = os.path.splitext(raw_bam)[0] + '_sorted.bam'
-            subprocess.run((  # Sort bam file and Index
-                f"cd {job_dir}; "
-                f"{shutil.which('/usr/bin/samtools')} sort {raw_bam} -o {after_sort}; "
-                f"{shutil.which('/usr/bin/samtools')} index {after_sort}"
-            ), shell=True)
+            if not jobbing["umitools_extract"]:
+                raw_sam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.sam")
+                run_and_check(f"cd {job_dir}; {shutil.which('/usr/bin/samtools')} view -h -o {raw_sam} {raw_bam}",
+                              shell=True)
+                self.jobs[job_id]["process_genome_alignment"] = raw_sam
+            else:
+                after_sort = os.path.splitext(raw_bam)[0] + '_sorted.bam'
+                run_and_check((  # Sort bam file and Index
+                    f"cd {job_dir}; "
+                    f"{shutil.which('/usr/bin/samtools')} sort {raw_bam} -o {after_sort}; "
+                    f"{shutil.which('/usr/bin/samtools')} index {after_sort}"
+                ), shell=True)
 
-            # Deduplication of UMI
-            output_prefix = "umi-deduplicated"
-            print(f"UMI deduplication for {job_id} is now running.")
-            subprocess.run((  # Run deduplication
-                f"cd {job_dir}; "
-                f"{shutil.which('umi_tools')} dedup "  # Define which umi_tools installation to use
-                f"-I {after_sort} "  # Input
-                f"--output-stats={output_prefix} "
-                f"-S {output_prefix}.bam "
-                f"> {output_prefix}.log "
-                f"> report_{output_prefix}.log"
-            ), shell=True)
+                # Deduplication of UMI
+                output_prefix = "umi-deduplicated"
+                print(f"UMI deduplication for {job_id} is now running.")
+                run_and_check((  # Run deduplication
+                    f"cd {job_dir}; "
+                    f"{shutil.which('umi_tools')} dedup "  # Define which umi_tools installation to use
+                    f"-I {after_sort} "  # Input
+                    f"--output-stats={output_prefix} "
+                    f"-S {output_prefix}.bam "
+                    f"> {output_prefix}.log "
+                    f"> report_{output_prefix}.log"
+                ), shell=True)
 
-            subprocess.run((  # Convert to sam file
-                f"cd {job_dir}; "
-                f"{shutil.which('/usr/bin/samtools')} view -h "  # Define which samtools installation to use
-                f"-o {output_prefix}.sam {output_prefix}.bam"  # Output & Input
-            ), shell=True)
+                run_and_check((  # Convert to sam file
+                    f"cd {job_dir}; "
+                    f"{shutil.which('/usr/bin/samtools')} view -h "  # Define which samtools installation to use
+                    f"-o {output_prefix}.sam {output_prefix}.bam"  # Output & Input
+                ), shell=True)
 
-            self.jobs[job_id]["process_genome_alignment"] = os.path.join(job_dir, f"{output_prefix}.sam")
+                self.jobs[job_id]["process_genome_alignment"] = os.path.join(job_dir, f"{output_prefix}.sam")
 
     def linking_pairs(self):
         for job_id in self.jobs:
@@ -454,7 +483,7 @@ class Controller:
         assert JobList.process_map[3].endswith("LinkingPairs")
         sam_path = os.path.join(job_dir, "prealignment.sam")
         print(f"Prealignment to link pairs for {job_id} is now running.")
-        subprocess.run((
+        run_and_check((
             f"cd {job_dir}; "  
             f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
             "-D 40 -R 6 -N 0 -L 15 -i S,1,0.50 "  # Alignment effort and sensitivity. It is now very high.
@@ -538,12 +567,13 @@ class Controller:
         if jobbing["sequencing_method"] in ["paired", "paired_linking"]:
             output_path = os.path.join(job_dir, "Read%_norRNA.fastq")
             print(f"rRNA removal for {job_id} is now running.")
-            subprocess.run((
+            run_and_check((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
                 f"-p{self.cpu} "  # Number of core to use
                 "--no-mixed "  # Do not search for individual pairs if one in a pair does not align.
                 # Add warning!
+                # Delete below, no need to be biased!
                 "-I20 -X120 "  # Default -I=0, -X=500. Since I will disregard X>120 and I<20 in the link-pairing module
                 "--time "  # Print the wall-clock time required to load the index files and align the reads.
                 "--score-min G,20,6 --ma 4 "  # Allow looser alignment. --ma 3 
@@ -565,7 +595,7 @@ class Controller:
         elif jobbing["sequencing_method"] in ["single"]:
             output_path = os.path.join(job_dir, "Read1_norRNA.fastq")
             print(f"rRNA removal for {job_id} is now running.")
-            subprocess.run((
+            run_and_check((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2')} "  # Run Bowtie2 module
                 f"-p{self.cpu} "  # Number of core to use
@@ -612,11 +642,16 @@ class Controller:
         assert JobList.process_map[1].endswith("Preprocessing")
 
         if jobbing["sequencing_method"] in ["paired", "paired_linking"]:
+            pattern1, pattern2 = jobbing["pattern_umi1"], jobbing["pattern_umi2"]
+            if not pattern1 and not pattern2:
+                self.jobs[job_id]["umitools_extract"] = False
+                return temp_paths
+            else:
+                self.jobs[job_id]["umitools_extract"] = True
             final_paths = [f"{i}_no-adapt_umi-aware.fastq.gz" for i in ["read1", "read2"]]
             final_paths = [os.path.join(job_dir, i) for i in final_paths]
-            pattern1, pattern2 = jobbing["pattern_umi1"], jobbing["pattern_umi2"]
             print(f"Umitool for {job_id} is now running.")
-            subprocess.run((
+            run_and_check((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('umi_tools')} extract "  # Define which extract installation to use
                 "--extract-method=regex "
@@ -631,10 +666,15 @@ class Controller:
             return final_paths
 
         elif jobbing["sequencing_method"] in ["single"]:
-            final_path = os.path.join(job_dir, "read1_no-adapt_umi-aware.fastq.gz")
             umitools_pattern = jobbing["pattern_umi"]
+            if not umitools_pattern:
+                self.jobs[job_id]["umitools_extract"] = False
+                return temp_paths
+            else:
+                self.jobs[job_id]["umitools_extract"] = True
+            final_path = os.path.join(job_dir, "read1_no-adapt_umi-aware.fastq.gz")
             print(f"Umitool for {job_id} is now running.")
-            subprocess.run((
+            run_and_check((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('umi_tools')} extract "  # Define which extract installation to use
                 "--extract-method=regex "
@@ -661,7 +701,7 @@ class Controller:
             read1_adapter = f"-a {jobbing['adapter1']}" if jobbing['adapter1'] else ""
             read2_adapter = f"-A {jobbing['adapter2']}" if jobbing['adapter2'] else ""
             print(f"Cutadapt for {job_id} is now running.")
-            subprocess.run((
+            run_and_check((
                     f"cd {job_dir}; "  # Change the directory to the index directory
                     f"{shutil.which('cutadapt')} "  # Define which cutadapt installation to use
                     f"--cores={self.cpu} "  # Define how many core to be used. All cores are now using
@@ -681,7 +721,7 @@ class Controller:
         elif jobbing["sequencing_method"] in ["single"]:
             temp_path = os.path.join(job_dir, "read1_cutadapt_temp.fastq.gz")  # Outputs for the first run
             print(f"Cutadapt for {job_id} is now running.")
-            subprocess.run((
+            run_and_check((
                 f"cd {job_dir}; "  # Change the directory to the index directory
                 f"{shutil.which('cutadapt')} "  # Define which cutadapt installation to use
                 f"--cores={self.cpu} "  # Define how many core to be used. All cores are now using
@@ -717,7 +757,7 @@ class Controller:
         if not self.create_index_search_metadata(dir_cdna):
             print("Indexing for cDNA is being calculated.")
             temp_cdna_fasta = self.org_db.get_db("cdna")
-            subprocess.run((
+            run_and_check((
                 f"cd {dir_cdna}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2-build')} "  # Name of the function
                 f"--threads {self.cpu} "  # Number of threads to be used.
@@ -731,7 +771,7 @@ class Controller:
         if not self.create_index_search_metadata(dir_rrna):
             print("Indexing for rRNA is being calculated.")
             temp_rrna_fasta = self.org_db.get_db("rrna")
-            subprocess.run((
+            run_and_check((
                 f"cd {dir_rrna}; "  # Change the directory to the index directory
                 f"{shutil.which('bowtie2-build')} "  # Name of the function
                 f"--threads {self.cpu} "  # Number of threads to be used.
@@ -748,7 +788,7 @@ class Controller:
             print("Indexing for DNA is being calculated.")
             temp_dna_fasta = self.org_db.get_db("dna")
             temp_gtf_fasta = self.org_db.get_db("gtf")
-            subprocess.run((
+            run_and_check((
                 f"cd {dir_dna}; "  # Change the directory to the index directory
                 f"{shutil.which('STAR')} "  # Define which star installation to use
                 f"--runThreadN {self.cpu} "  # Define how many core to be used. All cores are now using
@@ -809,13 +849,16 @@ class OrganismDatabase:
             # Transcriptome DNA fasta
             cdna_temp = "fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz"
             self.cdna = os.path.join(base_temp, cdna_temp)
+            # Protein Fasta
+            pep_temp = "fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz"
+            self.pep = os.path.join(base_temp, pep_temp)
         
         elif self.organism == "mus_musculus":
             # Genome GTF
-            gtf_temp = f"gtf/mus_musculus/Mus_musculus.GRCh38.{self.ensembl_release}.chr_patch_hapl_scaff.gtf.gz"
+            gtf_temp = f"gtf/mus_musculus/Mus_musculus.GRCm38.{self.ensembl_release}.chr_patch_hapl_scaff.gtf.gz"
             self.gtf = os.path.join(base_temp, gtf_temp)
             # Genome GFF3
-            gff3_temp = f"gff3/mus_musculus/Mus_musculus.GRCh38.{self.ensembl_release}.chr_patch_hapl_scaff.gff3.gz"
+            gff3_temp = f"gff3/mus_musculus/Mus_musculus.GRCm38.{self.ensembl_release}.chr_patch_hapl_scaff.gff3.gz"
             self.gff3 = os.path.join(base_temp, gff3_temp)
             # Genome DNA fasta
             dna_temp = "fasta/mus_musculus/dna/Mus_musculus.GRCm38.dna.primary_assembly.fa.gz"
@@ -823,6 +866,9 @@ class OrganismDatabase:
             # Transcriptome DNA fasta
             cdna_temp = "fasta/mus_musculus/cdna/Mus_musculus.GRCm38.cdna.all.fa.gz"
             self.cdna = os.path.join(base_temp, cdna_temp)
+            # Protein Fasta
+            pep_temp = "fasta/mus_musculus/pep/Mus_musculus.GRCm38.pep.all.fa.gz"
+            self.pep = os.path.join(base_temp, pep_temp)
 
         rrna_base_temp = "ftp://ftp.ebi.ac.uk/pub/databases/RNAcentral/current_release"
         self.rrna_raw_fasta = os.path.join(rrna_base_temp, "sequences/by-database/ena.fasta")
@@ -837,15 +883,15 @@ class OrganismDatabase:
         if not os.access(output_path_uncompressed, os.R_OK) or not os.path.isfile(output_path_uncompressed):
             print(f"Downloading from the server for {db}:{os.linesep}{db_url}")
             if not os.access(output_path_compressed, os.R_OK) or not os.path.isfile(output_path_compressed):
-                subprocess.run(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
-            subprocess.run(f"cd {self.repository}; gzip -d -q {output_path_compressed}", shell=True)
+                run_and_check(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
+            run_and_check(f"cd {self.repository}; gzip -d -q {output_path_compressed}", shell=True)
         return output_path_uncompressed
 
     def _download_rna_central(self, db_url):
         output_path = os.path.join(self.repository, os.path.basename(db_url))
         if not os.access(output_path, os.R_OK) or not os.path.isfile(output_path):
             print(f"Downloading from the server for rrna:{os.linesep}{db_url}")
-            subprocess.run(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
+            run_and_check(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
         return output_path
 
     def _filter_rrna(self):
@@ -932,6 +978,12 @@ def check_file(file_path, extensions):
     return os.path.isfile(file_path) and \
            os.access(file_path, os.R_OK) and \
            any([file_path.endswith(i) for i in extensions])
+
+
+def run_and_check(the_string, *args, **kwargs):
+    s = subprocess.run(the_string, *args, **kwargs)
+    if s.returncode != 0:
+       print(f"{Col.F}Error in the following subprocess:{os.linesep}{the_string}{os.linesep}{Col.E}")
 
 
 if __name__ == '__main__':
