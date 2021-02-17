@@ -1,0 +1,38 @@
+>>> Sixtymers_Rep1
+paired_linking
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep1_R1.fastq.gz
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep1_R2.fastq.gz
+
+>>> Sixtymers_Rep2
+paired_linking
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep2_R1.fastq.gz
+/home/kai/KEMALINECIK/BukauData/sixtymers/Rep2_R2.fastq.gz
+
+>>> Sixtymers_NoPK
+paired_linking
+/home/kai/KEMALINECIK/BukauData/sixtymers/noPK_R1.fastq.gz
+/home/kai/KEMALINECIK/BukauData/sixtymers/noPK_R2.fastq.gz
+
+>>> Sixtymers_TT1
+single
+/home/kai/KEMALINECIK/BukauData/translatome/HEK_Total_Rep1_S15_R1_001.fastq.gz
+
+>>> Sixtymers_TT2
+single
+/home/kai/KEMALINECIK/BukauData/translatome/HEK_Total_Rep2_S16_R1_001.fastq.gz
+
+>>> Coco_Mono1
+single
+/home/kai/KEMALINECIK/BukauData/coco/mono1.fastq.gz
+
+>>> Coco_Mono2
+single
+/home/kai/KEMALINECIK/BukauData/coco/mono2.fastq.gz
+
+>>> Coco_Dis1
+single
+/home/kai/KEMALINECIK/BukauData/coco/dis1.fastq.gz
+
+>>> Coco_Dis2
+single
+/home/kai/KEMALINECIK/BukauData/coco/dis2.fastq.gz

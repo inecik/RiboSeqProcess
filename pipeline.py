@@ -34,8 +34,6 @@ def main():
     print(f"{Col.H}Operation started.{os.linesep}{Col.E}")
     controller = Controller(a.identifier, a.organism, a.ensembl_release, a.cpu, a.temp, a.output, a.assignment, job_list.jobs)
     controller.start_processing()
-    
-    joblib.dump(controller, os.path.join(a.output, "pipeline_controller.joblib"))
     print(f"{Col.H}Operation successfully ended.{os.linesep}{Col.E}")
 
 def argument_parser():
@@ -246,9 +244,8 @@ class Controller:
         self.org_db = OrganismDatabase(self.organism, self.ensembl_release, self.temp_repo_dir)
         self.cpu = cpu_cores
         self.assign_from = assign_from
-        self.julia_path = os.path.join(os.path.dirname(__file__), "julia_assignment.jl")
+        self.julia_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "julia_assignment.jl")
         assert check_file(self.julia_path, [".jl"]), f"JuliaAssignment script could not be found.{os.linesep}{self.julia_path}"
-
         self.create_output_tree()
         self.index_directories = self.create_index()
 
@@ -265,6 +262,7 @@ class Controller:
         self.linking_pairs()
         self.genome_alignment()
         self.julia_assignment()
+        joblib.dump(self, os.path.join(self.data_repo_dir, self.run_identifier, "pipeline_controller.joblib"))
 
     def julia_assignment(self):
         gff_path = self.julia_assignment_gff3_correct()
@@ -350,6 +348,13 @@ class Controller:
         assert JobList.process_map[4].endswith("GenomeAlignment")
         prefix = "genome_alignment_"
 
+        if jobbing["sequencing_method"] in ["paired", "paired_linking"] and (jobbing["pattern_umi1"] or jobbing["pattern_umi1"]):
+            self.jobs[job_id]["is_umi_extracted"] = True
+        elif jobbing["sequencing_method"] == "single" and jobbing["pattern_umi"]:
+            self.jobs[job_id]["is_umi_extracted"] = True
+        else:
+            self.jobs[job_id]["is_umi_extracted"] = False
+
         if jobbing["sequencing_method"] in ["paired"]:  # note it down, not paired-linking
 
             print(f"Genome alignment for {job_id} is now running.")
@@ -375,7 +380,7 @@ class Controller:
             ), shell=True)
             raw_bam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.bam")
 
-            if not jobbing["umitools_extract"]:
+            if not jobbing["is_umi_extracted"]:
                 raw_sam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.sam")
                 run_and_check(f"cd {job_dir}; {shutil.which('/usr/bin/samtools')} view -h -o {raw_sam} {raw_bam}",
                               shell=True)
@@ -433,8 +438,8 @@ class Controller:
                 "> report_genome_alignment.log"
             ), shell=True)
             raw_bam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.bam")
-
-            if not jobbing["umitools_extract"]:
+            
+            if not jobbing["is_umi_extracted"]:
                 raw_sam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.sam")
                 run_and_check(f"cd {job_dir}; {shutil.which('/usr/bin/samtools')} view -h -o {raw_sam} {raw_bam}",
                               shell=True)
@@ -643,11 +648,8 @@ class Controller:
 
         if jobbing["sequencing_method"] in ["paired", "paired_linking"]:
             pattern1, pattern2 = jobbing["pattern_umi1"], jobbing["pattern_umi2"]
-            if not pattern1 and not pattern2:
-                self.jobs[job_id]["umitools_extract"] = False
+            if not pattern1 or not pattern2:
                 return temp_paths
-            else:
-                self.jobs[job_id]["umitools_extract"] = True
             final_paths = [f"{i}_no-adapt_umi-aware.fastq.gz" for i in ["read1", "read2"]]
             final_paths = [os.path.join(job_dir, i) for i in final_paths]
             print(f"Umitool for {job_id} is now running.")
@@ -668,10 +670,7 @@ class Controller:
         elif jobbing["sequencing_method"] in ["single"]:
             umitools_pattern = jobbing["pattern_umi"]
             if not umitools_pattern:
-                self.jobs[job_id]["umitools_extract"] = False
                 return temp_paths
-            else:
-                self.jobs[job_id]["umitools_extract"] = True
             final_path = os.path.join(job_dir, "read1_no-adapt_umi-aware.fastq.gz")
             print(f"Umitool for {job_id} is now running.")
             run_and_check((

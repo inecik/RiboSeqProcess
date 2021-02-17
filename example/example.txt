@@ -18,6 +18,7 @@ paired_linking
 /home/kai/KEMALINECIK/BukauData/sixtymers/Rep1_R1.fastq.gz
 /home/kai/KEMALINECIK/BukauData/sixtymers/Rep1_R2.fastq.gz
 pattern_umi2 = ^(?P<umi_2>.{5}).*
+pattern_umi1 = None
 
 >>> Coco_Mono1
 single
