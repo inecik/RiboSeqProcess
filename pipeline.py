@@ -1,18 +1,19 @@
-"""
+#!/usr/bin/env python
 
-"""
-
-import sys
-import os
-import shutil
-import subprocess
-from Bio import SeqIO
-import joblib
-import multiprocessing
-import pysam
-import re
 import argparse
 import datetime
+import multiprocessing
+import os
+import re
+import shutil
+import subprocess
+import sys
+import math
+import psutil
+
+import joblib
+import pysam
+from Bio import SeqIO
 
 
 # Authorship information
@@ -25,118 +26,156 @@ __status__ = "Development"
 
 
 def main():
-
-    a = argument_parser()
-
+    """
+    If running the module (the source file) as the main program, this function will be called.
+    :return: None
+    """
+    a = argument_parser()  # Get the command line arguments
+    # Create the job dictionary by using the introductory txt file.
     job_list = JobList(a.filepath)
+    # Make sure the process will be run with correct settings by making it confirmed by the user.
     job_list.confirm_job_list()
-    
-    print(f"{Col.H}Operation started.{os.linesep}{Col.E}")
-    controller = Controller(a.identifier, a.organism, a.ensembl_release, a.cpu, a.temp, a.output, a.assignment, job_list.jobs)
-    controller.start_processing()
-    print(f"{Col.H}Operation successfully ended.{os.linesep}{Col.E}")
+    print(f"{Col.H}Operation started.{os.linesep}{Col.E}")  # Print that the processing has just started.
+    # Create a controller object, which is the main functional object processing the riboseq data.
+    controller = Controller(a.identifier, a.organism, a.ensembl_release, a.cpu, a.temp,
+                            a.output, a.assignment, job_list.jobs)
+    controller.start_processing()  # Start processing by explicitly calling it.
+    print(f"{Col.H}Operation successfully ended.{os.linesep}{Col.E}")  # Print that the processing has just ended.
 
-def argument_parser():
 
-    parser = argparse.ArgumentParser(prog="pipeline.py",
-                                     description='The app description')  # todo
+def argument_parser() -> argparse.Namespace:
+    """
+    Extract the information given by the user via command line. It also contains the explanation of the flags and
+    the program itself
+    :return: NameSpace object containing parsed arguments.
+    """
 
+    parser = argparse.ArgumentParser(prog="pipeline.py",  # Name of the program
+                                     description="The app description.")  # todo
+
+    # Introduce arguments, they are already self explanatory.
     parser.add_argument("-r", type=str, dest="identifier",
-                        help="The identifier for this run, which will be the directory name for outputs.",
+                        help="the identifier for this run, which will be the directory name for all outputs under "
+                             "provided main output directory. If skipped, the default is a string containing "
+                             "date and time of the program start.",
                         required=False, default=datetime.datetime.now().strftime("Run_on_%Y_%m_%d_at_%H_%M_%S"))
 
     parser.add_argument("-a", type=str, dest="organism",
-                        help="Organism of interest for the analysis.",
+                        help="organism of interest for the analysis. If skipped, the default value is homo_sapiens.",
                         required=False, default="homo_sapiens",
-                        choices=["homo_sapiens", "mus_musculus"],  # todo
+                        choices=["homo_sapiens", "mus_musculus", "saccharomyces_cerevisiae"],  # todo
                         )
 
     parser.add_argument("-e", type=int, dest="ensembl_release",
-                        help="Ensembl version to be used.",
+                        help="ensembl version to be used. Ignored if the 'organism' does not necessitates Ensembl "
+                             "release information. Default value is 102.",
                         required=False, default=102)
 
     parser.add_argument("-c", type=int, dest="cpu",
-                        help="Number of cpu cores to be used. Default is maximum minus 2.",
-                        required=False, default=multiprocessing.cpu_count() - 2)
+                        help="number of cpu cores to be used. Default value is maximum minus eight.",
+                        required=False, default=multiprocessing.cpu_count() - 8)
 
     parser.add_argument("-s", type=int, dest="assignment",
-                        help="Select for 3' or 5' assignment.",
+                        help="select 3' or 5' assignment for Julia script.",
                         required=False, default=3,
-                        choices=[3, 5]
-                        )
+                        choices=[3, 5])
 
     parser.add_argument("-f", type=str, required=True, dest="filepath",
-                        help="File path for the task list.")
+                        help="path of the txt file which contains the task list.")
 
     parser.add_argument("-t", type=str, required=True, dest="temp",
-                        help="Directory to be used for temporary files.")
+                        help="absolute path of the directory to be used for temporary files such as genome indexes.")
 
     parser.add_argument("-o", type=str, required=True, dest="output",
-                        help="Directory to be used for output files.")
+                        help="absolute path of the directory to be used for output files.")
 
-    return parser.parse_args()
+    return parser.parse_args()  # Return the parsed result.
 
 
 class JobList:
+    """
+    Processes the introductory txt file, raises errors if the input is not fine, creates a dictionary with the content,
+    also makes the result confirmed by the user.
+    """
 
+    # Steps of the program. Changing the numbers here potentially makes whole pipeline to malfunction. If you will add
+    # any additional step, please take this into consideration. Either add the new step after 5, or just edit whole
+    # script properly.
     process_map = {1: "01_Preprocessing",
                    2: "02_Cleanup",
                    3: "03_LinkingPairs",
                    4: "04_GenomeAlignment",
                    5: "05_JuliaAssignment"}
-
+    # Default values are based on the data partly published on Matilde et. al 2021.
+    # Adapter sequences
     default_adapter_single = "ATCGTAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
     default_adapter1_paired = "ATCGTAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
-    default_adapter2_paired = None
+    default_adapter2_paired = None  # None, if no adapter trimming is required.
+    # UMI patterns, the below patterns are regex strings.
     default_pattern_single = "^(?P<umi_1>.{2}).*(?P<umi_2>.{5})$"
     default_pattern1_paired = "^(?P<umi_1>.{2}).*"
-    default_pattern2_paired = "^(?P<discard_2>.{5})(?P<umi_2>.{5}).*"  # ".*(?P<umi_2>.{5})(?P<discard_2>.{5})$"
+    default_pattern2_paired = "^(?P<discard_2>.{5})(?P<umi_2>.{5}).*"
+    # Default processing steps, the numbers corresponds to the steps of process_map dictionary above.
     default_processes_single = [1, 2, 4, 5]
     default_processes_paired_linking = [1, 2, 3, 4, 5]
     default_processes_paired = [1, 2, 4]
-    proper_input_extensions = ["fastq.gz"]  # todo:çünkü sadece 5'i çalıştıracaksan sam, sadece 4'se bazen
+    # For now, the only valid input for raw processing files are fastq.gz. Other file formats were not tested.
+    proper_input_extensions = ["fastq.gz"]
 
-    def __init__(self, user_task_file):
+    def __init__(self, user_task_file: str):
+        """
+        Initiates the object.
+        :param user_task_file: Absolute or relative path of introductory txt file
+        """
         self.user_task_file = user_task_file
         self.jobs = self.read_job_list(self.user_task_file)
 
     @staticmethod
-    def read_job_list(file_path):
-
-        result = dict()
-
-        with open(file_path, "r") as handle:
-
-            for entry in [r.strip() for r in handle.read().split(">>>") if r.strip()]:
-
-                if entry.startswith("#"):
-                    continue
-
-                line = [r.strip() for r in entry.split(os.linesep) if r.strip() and not r.strip().startswith("#")]
-                print_error_entry = Col.B + os.linesep.join(line) + Col.E
-
-                # print(line)
-
-                if len(line[0].split()) != 1:
-                    raise ValueError(f"Improper key name:{os.linesep}{print_error_entry}")
+    def read_job_list(file_path: str) -> dict:
+        """
+        Processes the introductory txt file, raises errors if the input file is not in the allowed format, creates a
+        dictionary with the file content.
+        :param file_path: Absolute or relative path of introductory txt file
+        :return: Job IDs as the keys relevant information as the values.
+        """
+        result = dict()  # Create a dictionary to populate with jobs
+        with open(file_path, "r") as handle:  # Open the file in read only mode.
+            # Read all the data in the file. Split the content first with '>>>' to separate out the jobs.
+            content = f"{os.linesep}".join([line.strip() for line in handle if not line.startswith('#')])  # Skip comments
+            for entry in [r.strip() for r in content.split(">>>") if r.strip()]:  # For each job
+                # Separate out the lines in a given job by new line character.
+                # If it starts with '#' just ignore this line
+                line = [r.strip() for r in entry.split(os.linesep) if r.strip()]
+                print_error_entry = Col.B + os.linesep.join(line) + Col.E  # A string to be printed in case of an error.
+                # Do not allow whitespace inside an information. Note that lines were already striped above.
+                if not all([len(i.split()) == 1 for i in line]):
+                    raise ValueError(f"No whitspace is allowed:{os.linesep}{print_error_entry}")
+                # Make sure the second line (first starts with '>>>') is one of below list.
                 if line[1] not in ["single", "paired_linking", "paired"]:
                     raise ValueError(f"Improper sequencing method:{os.linesep}{print_error_entry}")
+                # Make sure input raw file is exists, readable, and with one of the allowed extensions.
                 if not check_file(line[2], JobList.proper_input_extensions):
                     raise ValueError(f"Improper file or file extension method:{os.linesep}{print_error_entry}")
+                # Make sure that input raw file path is absolute.
                 if not os.path.isabs(line[2]):
                     raise ValueError(f"File paths have to be absolute:{os.linesep}{print_error_entry}")
+                # Make sure input raw file is exists, readable, and with one of the allowed extensions.
                 if line[1].startswith("paired") and not check_file(line[3], JobList.proper_input_extensions):
                     raise ValueError(f"Improper file or file extension method:{os.linesep}{print_error_entry}")
+                # Make sure that input raw file path is absolute.
                 if line[1].startswith("paired") and not os.path.isabs(line[3]):
                     raise ValueError(f"File paths have to be absolute:{os.linesep}{print_error_entry}")
 
+                # If the job is for single end sequencing. Initiate the job dictionary with default elements.
                 if line[1] == "single":
                     temp_dict = {"sequencing_method": line[1],
                                  "input_fastq": line[2],
                                  "adapter": JobList.default_adapter_single,
                                  "pattern_umi": JobList.default_pattern_single,
                                  "processes": JobList.default_processes_single}
-                else:
+                else:  # If the job is for paired end sequencing. Initiate the job dictionary with default elements.
+                    # The 'paired_linking' and 'paired' needs to be different in processes parameter, since
+                    # paired_linking requires an extra LinkingPairs step.
                     process_temp = JobList.default_processes_paired if line[1] == "paired" \
                         else JobList.default_processes_paired_linking
                     temp_dict = {"sequencing_method": line[1],
@@ -146,54 +185,69 @@ class JobList:
                                  "pattern_umi1": JobList.default_pattern1_paired,
                                  "pattern_umi2": JobList.default_pattern2_paired,
                                  "processes": process_temp}
-
+                # If the user want to change adapters, umi, or processes, the lines after 3 for single end sequencing,
+                # and the lines after 4 for paired end sequencing will be populated.
                 non_default_entries = line[3:] if line[1] == "single" else line[4:]
+                # Allowed keys for the non default entries
                 if line[1] == "single":
                     possible_settings = ["adapter", "pattern_umi", "processes"]
                 else:
                     possible_settings = ["adapter1", "adapter2", "pattern_umi1", "pattern_umi2", "processes"]
-                for nde in non_default_entries:
+                for nde in non_default_entries:  # For each non default entry
+                    # First split with '=', and strip the output.
                     des = [r.strip() for r in nde.split("=") if r.strip()]
-                    if len(des) != 2 or des[0] not in possible_settings:
+                    if len(des) != 2 or des[0] not in possible_settings:  # Ignore if setting is not with allowed keys.
+                        # If there is two '=' there will be more than 2 elements after split. Alternatively, if there
+                        # is no '=' or one side of the '=' is not populated, there will be one element.
                         print(f"{Col.W}Manual setting ignored for {line[0]}:{os.linesep}{des}{Col.E}")
-                    elif des[0] == "processes":
+                    elif des[0] == "processes":  # If the user wants to customize processes.
+                        # Split by ',' and convert everything into integers. Error will be raised if it is not possible.
                         temp_dict[des[0]] = sorted([int(r.strip()) for r in des[1].split(',') if r.strip()])
-                    else:
+                    else:  # For other customizations.
+                        # Just get the value directly if the value is not 'None'. If 'None', set the value to None.
                         temp_dict[des[0]] = des[1] if des[1] != "None" else None
-
+                # Make sure that all entries are unique
                 assert line[0] not in result, f"Duplicated key for {line[0]}"
+                # Add the dictionary for the individual job to the dictionary of all jobs.
                 result[line[0]] = temp_dict
-
-        return result
+        return result  # Return the final dictionary.
 
     def confirm_job_list(self):
+        """
+        Method to make sure the processing the txt file is correct. It prints out the jobs and request confirmation
+        by the user. If the user types anything except 'enter', the program will be aborted.
+        :return: None
+        """
+        # Print the instruction.
         print(f"{Col.H}Please confirm the jobs.{os.linesep}"
               f"Press enter to confirm, type anything to stop.{os.linesep}"
               f"There are {len(self.jobs)} jobs:{Col.E}{os.linesep}")
-        for job_id in self.jobs:
-            the_job = self.jobs[job_id]
+
+        for job_id in self.jobs:  # For all jobs in the job list.
+            the_job = self.jobs[job_id]  # Get the job information dictionary.
+            # Convert the processing into str with comma as the delimiter to be printed out
             processes_pre = ", ".join([str(i) for i in the_job['processes']])
 
-            if the_job["sequencing_method"] == "single":
-
+            if the_job["sequencing_method"] == "single":  # If the job is a single end sequencing job.
+                # If the default values are used, just add 'Default'. Otherwise, print the information as it is.
                 adapter_temp = the_job["adapter"] if the_job["adapter"] != JobList.default_adapter_single \
                     else f"Default (\"{the_job['adapter']}\")"
                 pattern_temp = the_job["pattern_umi"] if the_job["pattern_umi"] != JobList.default_pattern_single \
                     else f"Default (\"{the_job['pattern_umi']}\")"
                 processes_temp = processes_pre if the_job["processes"] != JobList.default_processes_single \
                     else f"Default (\"{processes_pre}\")"
-
+                # Prepare a string to be printed out in the command line
                 print_string = (
-                    f"{Col.H}> {job_id}{Col.C}{os.linesep}"
-                    f"Sequencing Method : {the_job['sequencing_method']}{os.linesep}"
+                    f"{Col.H}> {job_id}{Col.C}{os.linesep}"  # Job ID
+                    f"Sequencing Method : {the_job['sequencing_method']}{os.linesep}" 
                     f"Read              : {the_job['input_fastq']}{os.linesep}"
                     f"Adapter           : {adapter_temp}{os.linesep}"
                     f"Pattern UMI       : {pattern_temp}{os.linesep}"
                     f"Processes         : {processes_temp}{Col.E}{os.linesep}"
                 )
 
-            else:
-
+            else:  # If the job is a paired end sequencing job.
+                # If the default values are used, just add 'Default'. Otherwise, print the information as it is.
                 adapter1_temp = the_job["adapter1"] if the_job["adapter1"] != JobList.default_adapter1_paired \
                     else f"Default (\"{the_job['adapter1']}\")"
                 adapter2_temp = the_job["adapter2"] if the_job["adapter2"] != JobList.default_adapter2_paired \
@@ -202,14 +256,13 @@ class JobList:
                     else f"Default (\"{the_job['pattern_umi1']}\")"
                 pattern2_temp = the_job["pattern_umi2"] if the_job["pattern_umi2"] != JobList.default_pattern2_paired \
                     else f"Default (\"{the_job['pattern_umi2']}\")"
-
                 processes_method = JobList.default_processes_paired if the_job["sequencing_method"] == "paired" \
                     else JobList.default_processes_paired_linking
                 processes_temp = processes_pre if the_job["processes"] != processes_method \
                     else f"Default (\"{processes_pre}\")"
-
+                # Prepare a string to be printed out in the command line
                 print_string = (
-                    f"{Col.H}> {job_id}{Col.C}{os.linesep}"
+                    f"{Col.H}> {job_id}{Col.C}{os.linesep}"  # Job ID
                     f"Sequencing Method : {the_job['sequencing_method']}{os.linesep}"
                     f"Read 1            : {the_job['input_fastq'][0]}{os.linesep}"
                     f"Read 2            : {the_job['input_fastq'][1]}{os.linesep}"
@@ -220,59 +273,78 @@ class JobList:
                     f"Processes         : {processes_temp}{Col.E}{os.linesep}"
                 )
 
-            confirm = input(print_string)
-            if confirm != "":
+            confirm = input(print_string)  # Request the user's response
+            if confirm != "":  # If not pressed anything except directly 'enter'
                 print(f"{Col.F}Process terminated.{Col.E}")
-                sys.exit(1)
-            else:
+                sys.exit(1)  # Terminate the process with an error code 1.
+            else:  # Otherwise just move to the next job.
                 print(f"{Col.W}Confirmed.{os.linesep}{Col.E}")
 
 
 class Controller:
 
-    def __init__(self, run_identifier, organism, ensembl_release, cpu_cores, temp_repo_dir, data_repo_dir, assign_from, jobs):
-
+    def __init__(self, run_identifier: str, organism: str, ensembl_release: int, cpu_cores: int,
+                 temp_repo_dir: str, data_repo_dir: str, assign_from: int, jobs: dict):
+        # First check if the directories for temp and output, make sure they exist and writable.
         check_directory([temp_repo_dir, data_repo_dir])
+        # Make sure the below third party packages are installed.
+        # Systems samtools will be used because the conda distribution raises some errors.
         check_exist_package(["cutadapt", "umi_tools", "bowtie2-build", "STAR", "bowtie2", "/usr/bin/samtools"])
-
+        # Assign the parameters as object variables
         self.temp_repo_dir = temp_repo_dir
         self.data_repo_dir = data_repo_dir
         self.organism = organism
         self.ensembl_release = ensembl_release
         self.jobs = jobs
         self.run_identifier = run_identifier
-        self.org_db = OrganismDatabase(self.organism, self.ensembl_release, self.temp_repo_dir)
         self.cpu = cpu_cores
         self.assign_from = assign_from
+        # Make sure julia assignment script is in the same directory with this script.
         self.julia_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "julia_assignment.jl")
-        assert check_file(self.julia_path, [".jl"]), f"JuliaAssignment script could not be found.{os.linesep}{self.julia_path}"
+        assert check_file(self.julia_path, [".jl"]), f"JuliaAssignment script could not be found.{os.linesep}:" \
+                                                     f"{self.julia_path}"
+        # Create an OrganismDatabase object with designated parameters.
+        self.org_db = OrganismDatabase(self.organism, self.ensembl_release, self.temp_repo_dir)
+        # Call the method to create the folders under data_repo_dir to save the final and intermediate results.
         self.create_output_tree()
+        # Call the method to create index files for genome, rRNA and transcriptome alignments. Note that only
+        # pair_linking uses transcriptome indexes but this will be created anyway.
         self.index_directories = self.create_index()
 
     def is_already_calculated(self):
-        pass # todo:
-        # normalde dir'e metadata bıraksın.
-        # eğer değiştirilmemişse skip etsin, similar to index..
-        # doğrudan yükleyince, print doğrudan yüklediğini. aynısını index'e de yap
+        pass  # todo
 
     def start_processing(self):
-
+        """
+        Runs the processing for all steps.
+        :return: None
+        """
         self.preprocessing()
         self.cleanup()
         self.linking_pairs()
         self.genome_alignment()
         self.julia_assignment()
+        # Also save the Controller object as a joblib file, to be able to see running parameters in the future.
         joblib.dump(self, os.path.join(self.data_repo_dir, self.run_identifier, "pipeline_controller.joblib"))
 
     def julia_assignment(self):
-        gff_path = self.julia_assignment_gff3_correct()
-        for job_id in self.jobs:
-            if 5 in self.jobs[job_id]["processes"]:
-                self.julia_assignment_one_job(job_id, gff_path)
-                # No output path
+        """
+        For the jobs which is set to be processed, run julia assignment.
+        :return: None
+        """
+        gff_path = self.julia_assignment_gff3_correct()  # Get GFF file path
+        for job_id in self.jobs:  # Iterate over the jobs
+            if 5 in self.jobs[job_id]["processes"]:  # If it is set to be processed by this step.
+                self.julia_assignment_one_job(job_id, gff_path)  # Run the processing for this job.
+        # The last step of the pipeline, no output path is returned.
 
     def julia_assignment_one_job(self, job_id, gff_path):
+        """
 
+        :param job_id:
+        :param gff_path:
+        :return:
+        """
         jobbing = self.jobs[job_id]
         job_dir = jobbing["processes_dirs"][5]  # 5'i açıkla
         input_sam = self.jobs[job_id]["process_genome_alignment"]
@@ -283,55 +355,58 @@ class Controller:
             f"{shutil.which('julia')} {self.julia_path} "  # Which Julia installation to use and the script
             f"-g {gff_path} "  # Gff3 file. Removed of duplicated gene names
             f"-a {self.assign_from} "  # Assignment from 3'
-            # "-u "  # Inherited from Mati. Removed because umi-tool deduplication is already done.
+            # "-u "  # Inherited from Matilde et al 2021. Removed here because umi-tool deduplication was already done.
             f"-o {job_dir} {input_sam}"  # Output file & Input file
-        ), shell=True)
-
-        # No output path
+        ), shell=True)  # The specified command will be executed through the shell.
+        # The last step of the pipeline, no output path is returned.
 
     def julia_assignment_gff3_correct(self):
         gff_path = self.org_db.get_db("gff3")
         output_path = os.path.splitext(gff_path)[0] + "_renamed_duplicate_gene_names.gff3"
 
-        if not os.access(output_path, os.R_OK) or not os.path.isfile(output_path):
-            with open(gff_path, "r") as gff_handle:  # "GFF3 is imported to the random access memory."
-                gff_raw = gff_handle.readlines()
+        try:
 
-            n_map = dict()  # Gene names are read.
-            for entry in gff_raw:
-                if not entry.startswith('#'):
-                    entry = entry.strip().split('\t')
-                    attributes = dict([i.split('=') for i in entry[8].split(';')])
-                    if entry[2] == "gene":
-                        gene_name = attributes['Name']
-                        gene_id = attributes['ID'].split(':')[1]
-                        if gene_name not in n_map:
-                            n_map[gene_name] = [gene_id]
-                        else:
-                            n_map[gene_name].append(gene_id)
+            if not os.access(output_path, os.R_OK) or not os.path.isfile(output_path):
+                with open(gff_path, "r") as gff_handle:  # "GFF3 is imported to the random access memory."
+                    gff_raw = gff_handle.readlines()
 
-            duplicated_gene_name = dict()  # Duplicated gene names are detected.
-            for i in n_map:
-                if len(n_map[i]) > 1:
-                    duplicated_gene_name[i] = 0
-
-            # Output is written by changing the names of duplicated gene names.
-            with open(output_path, "w") as output_handle:
+                n_map = dict()  # Gene names are read.
                 for entry in gff_raw:
-                    if entry.startswith('#'):
-                        output_handle.write(entry)
-                    else:
-                        entry_split = entry.strip().split('\t')
-                        attributes = dict([i.split('=') for i in entry_split[8].split(';')])
-                        if entry_split[2] == "gene" and attributes['Name'] in duplicated_gene_name:
-                            the_name = attributes['Name']
-                            duplicated_gene_name[the_name] += 1
-                            new_name = the_name + f"_duplicated_{duplicated_gene_name[the_name]}"
-                            new_entry = entry.replace(f";Name={the_name};", f";Name={new_name};")
-                            output_handle.write(new_entry)
-                        else:
+                    if not entry.startswith('#'):
+                        entry = entry.strip().split('\t')
+                        attributes = dict([i.split('=') for i in entry[8].split(';')])
+                        if entry[2] == "gene":
+                            gene_name = attributes['Name']
+                            gene_id = attributes['ID'].split(':')[1]
+                            if gene_name not in n_map:
+                                n_map[gene_name] = [gene_id]
+                            else:
+                                n_map[gene_name].append(gene_id)
+
+                duplicated_gene_name = dict()  # Duplicated gene names are detected.
+                for i in n_map:
+                    if len(n_map[i]) > 1:
+                        duplicated_gene_name[i] = 0
+
+                # Output is written by changing the names of duplicated gene names.
+                with open(output_path, "w") as output_handle:
+                    for entry in gff_raw:
+                        if entry.startswith('#'):
                             output_handle.write(entry)
-        return output_path
+                        else:
+                            entry_split = entry.strip().split('\t')
+                            attributes = dict([i.split('=') for i in entry_split[8].split(';')])
+                            if entry_split[2] == "gene" and attributes['Name'] in duplicated_gene_name:
+                                the_name = attributes['Name']
+                                duplicated_gene_name[the_name] += 1
+                                new_name = the_name + f"_duplicated_{duplicated_gene_name[the_name]}"
+                                new_entry = entry.replace(f";Name={the_name};", f";Name={new_name};")
+                                output_handle.write(new_entry)
+                            else:
+                                output_handle.write(entry)
+            return output_path
+        except KeyError:
+            return gff_path
 
     def genome_alignment(self):
         for job_id in self.jobs:
@@ -348,12 +423,15 @@ class Controller:
         assert JobList.process_map[4].endswith("GenomeAlignment")
         prefix = "genome_alignment_"
 
-        if jobbing["sequencing_method"] in ["paired", "paired_linking"] and (jobbing["pattern_umi1"] or jobbing["pattern_umi1"]):
+        if jobbing["sequencing_method"] in ["paired", "paired_linking"] \
+                and (jobbing["pattern_umi1"] or jobbing["pattern_umi1"]):
             self.jobs[job_id]["is_umi_extracted"] = True
         elif jobbing["sequencing_method"] == "single" and jobbing["pattern_umi"]:
             self.jobs[job_id]["is_umi_extracted"] = True
         else:
             self.jobs[job_id]["is_umi_extracted"] = False
+
+        available_memory = int(psutil.virtual_memory().available * 9 / 10)
 
         if jobbing["sequencing_method"] in ["paired"]:  # note it down, not paired-linking
 
@@ -373,17 +451,18 @@ class Controller:
                 f"--outFileNamePrefix {os.path.join(job_dir, prefix)} "
                 "--outReadsUnmapped Fastx "
                 "--outSAMtype BAM SortedByCoordinate "
+                f"--limitBAMsortRAM {available_memory} "  # If not set, error can be raised for some cases.
                 "--outSAMattributes All XS "
                 "--quantMode GeneCounts "
                 "--twopassMode Basic "
                 "> report_genome_alignment.log"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
             raw_bam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.bam")
 
             if not jobbing["is_umi_extracted"]:
                 raw_sam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.sam")
                 run_and_check(f"cd {job_dir}; {shutil.which('/usr/bin/samtools')} view -h -o {raw_sam} {raw_bam}",
-                              shell=True)
+                              shell=True)  # The specified command will be executed through the shell.
                 self.jobs[job_id]["process_genome_alignment"] = raw_sam
             else:
                 after_sort = os.path.splitext(raw_bam)[0] + '_sorted.bam'
@@ -391,7 +470,7 @@ class Controller:
                     f"cd {job_dir}; "
                     f"{shutil.which('/usr/bin/samtools')} sort {raw_bam} -o {after_sort}; "
                     f"{shutil.which('/usr/bin/samtools')} index {after_sort}"
-                ), shell=True)
+                ), shell=True)  # The specified command will be executed through the shell.
 
                 # Deduplication of UMI
                 output_prefix = "umi-deduplicated"
@@ -405,13 +484,13 @@ class Controller:
                     f"--unpaired-reads discard "
                     f"-S {output_prefix}.bam "
                     f"> report_{output_prefix}.log"
-                ), shell=True)
+                ), shell=True)  # The specified command will be executed through the shell.
 
                 run_and_check((  # Convert to sam file
                     f"cd {job_dir}; "
                     f"{shutil.which('/usr/bin/samtools')} view -h "  # Define which samtools installation to use
                     f"-o {output_prefix}.sam {output_prefix}.bam"  # Output & Input
-                ), shell=True)
+                ), shell=True)  # The specified command will be executed through the shell.
                 self.jobs[job_id]["process_genome_alignment"] = os.path.join(job_dir, f"{output_prefix}.sam")
 
         elif jobbing["sequencing_method"] in ["single", "paired_linking"]:
@@ -432,17 +511,18 @@ class Controller:
                 f"--outFileNamePrefix {os.path.join(job_dir, prefix)} "
                 "--outReadsUnmapped Fastx "
                 "--outSAMtype BAM SortedByCoordinate "
+                f"--limitBAMsortRAM {available_memory} "  # If not set, error can be raised for some cases.
                 "--outSAMattributes All XS "
                 "--quantMode GeneCounts "
                 "--twopassMode Basic "
                 "> report_genome_alignment.log"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
             raw_bam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.bam")
             
             if not jobbing["is_umi_extracted"]:
                 raw_sam = os.path.join(job_dir, prefix + "Aligned.sortedByCoord.out.sam")
                 run_and_check(f"cd {job_dir}; {shutil.which('/usr/bin/samtools')} view -h -o {raw_sam} {raw_bam}",
-                              shell=True)
+                              shell=True)  # The specified command will be executed through the shell.
                 self.jobs[job_id]["process_genome_alignment"] = raw_sam
             else:
                 after_sort = os.path.splitext(raw_bam)[0] + '_sorted.bam'
@@ -450,7 +530,7 @@ class Controller:
                     f"cd {job_dir}; "
                     f"{shutil.which('/usr/bin/samtools')} sort {raw_bam} -o {after_sort}; "
                     f"{shutil.which('/usr/bin/samtools')} index {after_sort}"
-                ), shell=True)
+                ), shell=True)  # The specified command will be executed through the shell.
 
                 # Deduplication of UMI
                 output_prefix = "umi-deduplicated"
@@ -469,7 +549,7 @@ class Controller:
                     f"cd {job_dir}; "
                     f"{shutil.which('/usr/bin/samtools')} view -h "  # Define which samtools installation to use
                     f"-o {output_prefix}.sam {output_prefix}.bam"  # Output & Input
-                ), shell=True)
+                ), shell=True)  # The specified command will be executed through the shell.
 
                 self.jobs[job_id]["process_genome_alignment"] = os.path.join(job_dir, f"{output_prefix}.sam")
 
@@ -508,7 +588,7 @@ class Controller:
             f"-2 {temp_fastq[1]} "  # Read 2
             f"-S {sam_path} "  # Output sam file
             "2> report_prealignment.log"
-        ), shell=True)
+        ), shell=True)  # The specified command will be executed through the shell.
 
         # Take the transcript sequences into random access memory
         fasta_transcriptome = self.org_db.get_db("cdna")
@@ -592,7 +672,7 @@ class Controller:
                 # f"--al-conc {os.path.join(job_dir, 'Read%_only_rRNA.fastq')} "  # For testing purposes
                 "-S /dev/null "  # Discard alignment sam file /dev/null
                 f"2> report_cleanup.log"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
 
             self.jobs[job_id]["process_cleanup"] = [os.path.join(job_dir, j)
                                                     for j in ["Read1_norRNA.fastq", "Read2_norRNA.fastq"]]
@@ -615,7 +695,7 @@ class Controller:
                 # f"--al {os.path.join(job_dir, 'Read1_only_rRNA.fastq')} "  # For testing purposes
                 "-S /dev/null "  # Discard alignment sam file /dev/null
                 f"2> report_rnaremove.txt"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
 
             self.jobs[job_id]["process_cleanup"] = output_path
 
@@ -628,7 +708,6 @@ class Controller:
         for job_id in [job_id for job_id in self.jobs if 1 not in self.jobs[job_id]["processes"]]:
             self.jobs[job_id]["process_cutadapt"] = self.jobs[job_id]["input_fastq"]
             self.jobs[job_id]["process_umitools"] = self.jobs[job_id]["input_fastq"]
-
 
     def preprocessing_umitools_multiprocessing(self, job_id_list):
         assert len(self.jobs) <= self.cpu
@@ -663,7 +742,7 @@ class Controller:
                 f"--read2-in={temp_paths[1]} --read2-out={final_paths[1]} "  # Input and output for read 2
                 f"--log=umi_tools.log "  # Log the results
                 f"> 'report_umitool.log'"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
 
             return final_paths
 
@@ -681,7 +760,7 @@ class Controller:
                 f"-I {temp_paths} -S {final_path} "  # Input and output for read 1
                 f"--log=umi_tools.log "  # Log the results
                 f"> 'report_umitool.log'"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
 
             return final_path
 
@@ -713,7 +792,7 @@ class Controller:
                     f"-o {temp_paths[0]} -p {temp_paths[1]} "  # Path to output trimmed sequences
                     f"{input_fastq[0]} {input_fastq[1]} "  # Input file
                     f"1> 'report_cutadapt_temp.log'"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
 
             self.jobs[job_id]["process_cutadapt"] = temp_paths
 
@@ -733,7 +812,7 @@ class Controller:
                 f"-o {temp_path} "  # Path to output trimmed sequences
                 f"{input_fastq} "  # Input file
                 f"1> 'report_cutadapt_temp.log'"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
 
             self.jobs[job_id]["process_cutadapt"] = temp_path
 
@@ -763,7 +842,7 @@ class Controller:
                 f"{temp_cdna_fasta} "  # Input file. -f is to indicate the file is in fasta format
                 f"{index_name_cdna} "  # The basename of the index files to write
                 f"> report_{self.organism}_cdna.log"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
             metadata_index = get_files_metadata(dir_cdna)  # Write the file info
             joblib.dump(metadata_index, os.path.join(dir_cdna, ".metadata.joblib"))
 
@@ -777,7 +856,7 @@ class Controller:
                 f"{temp_rrna_fasta} "  # Input file. -f is to indicate the file is in fasta format
                 f"{index_name_rrna} "  # The basename of the index files to write
                 f"> report_{self.organism}_rrna.log"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
             metadata_index = get_files_metadata(dir_rrna)  # Write the file info
             joblib.dump(metadata_index, os.path.join(dir_rrna, ".metadata.joblib"))
 
@@ -787,17 +866,23 @@ class Controller:
             print("Indexing for DNA is being calculated.")
             temp_dna_fasta = self.org_db.get_db("dna")
             temp_gtf_fasta = self.org_db.get_db("gtf")
+
+            # Calculate genomeSAindexNbases
+            genome_size = sum([len(rec.seq) for rec in SeqIO.parse(temp_dna_fasta,"fasta")])
+            sa_index_parameter = min(14, math.floor(math.log(genome_size, 2) / 2 - 1))
+            # For small genomes, this paramter has to be scaled down.
             run_and_check((
                 f"cd {dir_dna}; "  # Change the directory to the index directory
                 f"{shutil.which('STAR')} "  # Define which star installation to use
                 f"--runThreadN {self.cpu} "  # Define how many core to be used. All cores are now using
                 "--runMode genomeGenerate "
                 f"--genomeDir {dir_dna} "  # Directory to save the files
+                f"--genomeSAindexNbases {sa_index_parameter} "
                 f"--genomeFastaFiles {temp_dna_fasta} "  # Specifies FASTA file with the genome reference sequences
                 f"--sjdbGTFfile {temp_gtf_fasta} "  # Specifies the file with annotated transcripts in the GTF format
                 f"--sjdbOverhang {read_length_minus_1} "  # The length of the sequence around the annotated junction
                 f"> report_{self.organism}_dna.log"
-            ), shell=True)
+            ), shell=True)  # The specified command will be executed through the shell.
             metadata_index = get_files_metadata(dir_dna)  # Write the file info
             joblib.dump(metadata_index, os.path.join(dir_dna, ".metadata.joblib"))
 
@@ -821,10 +906,10 @@ class Controller:
 
 class OrganismDatabase:
 
-    ID_MAP = {"homo_sapiens": 9606, "mus_musculus": 10090}  # todo
+    ID_MAP = {"homo_sapiens": 9606, "mus_musculus": 10090, "saccharomyces_cerevisiae": 4932}  # todo
 
     def __init__(self, organism, ensembl_release, temp_repo_dir):
-        assert organism in ["homo_sapiens", "mus_musculus"]  # todo
+        assert organism in ["homo_sapiens", "mus_musculus", "saccharomyces_cerevisiae"]  # todo
         # todo: also add "homo_sapiens_refseq"
 
         self.ensembl_release = ensembl_release
@@ -869,6 +954,24 @@ class OrganismDatabase:
             pep_temp = "fasta/mus_musculus/pep/Mus_musculus.GRCm38.pep.all.fa.gz"
             self.pep = os.path.join(base_temp, pep_temp)
 
+        elif self.organism == "saccharomyces_cerevisiae":
+            # Genome GTF
+            gtf_temp = f"gtf/saccharomyces_cerevisiae/Saccharomyces_cerevisiae.R64-1-1.{self.ensembl_release}.gtf.gz"
+            self.gtf = os.path.join(base_temp, gtf_temp)
+            # Genome GFF3
+            gff3_temp = f"gff3/saccharomyces_cerevisiae/Saccharomyces_cerevisiae.R64-1-1.{self.ensembl_release}.gff3.gz"
+            self.gff3 = os.path.join(base_temp, gff3_temp)
+            # Genome DNA fasta
+            dna_temp = "fasta/saccharomyces_cerevisiae/dna/Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa.gz" 
+            # If the primary assembly file is not present, that indicates that there are no haplotype/patch regions, and the 'toplevel' file is equivalent
+            self.dna = os.path.join(base_temp, dna_temp)
+            # Transcriptome DNA fasta
+            cdna_temp = "fasta/saccharomyces_cerevisiae/cdna/Saccharomyces_cerevisiae.R64-1-1.cdna.all.fa.gz"
+            self.cdna = os.path.join(base_temp, cdna_temp)
+            # Protein Fasta
+            pep_temp = "fasta/saccharomyces_cerevisiae/pep/Saccharomyces_cerevisiae.R64-1-1.pep.all.fa.gz"
+            self.pep = os.path.join(base_temp, pep_temp)
+
         rrna_base_temp = "ftp://ftp.ebi.ac.uk/pub/databases/RNAcentral/current_release"
         self.rrna_raw_fasta = os.path.join(rrna_base_temp, "sequences/by-database/ena.fasta")
         self.rrna_raw_information = os.path.join(rrna_base_temp, "id_mapping/database_mappings/ena.tsv")
@@ -883,7 +986,8 @@ class OrganismDatabase:
             print(f"Downloading from the server for {db}:{os.linesep}{db_url}")
             if not os.access(output_path_compressed, os.R_OK) or not os.path.isfile(output_path_compressed):
                 run_and_check(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
-            run_and_check(f"cd {self.repository}; gzip -d -q {output_path_compressed}", shell=True)
+            subprocess.run(f"cd {self.repository}; gzip -d -q {output_path_compressed}", shell=True)
+            # The specified commands will be executed through the shell.
         return output_path_uncompressed
 
     def _download_rna_central(self, db_url):
@@ -891,6 +995,7 @@ class OrganismDatabase:
         if not os.access(output_path, os.R_OK) or not os.path.isfile(output_path):
             print(f"Downloading from the server for rrna:{os.linesep}{db_url}")
             run_and_check(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
+            # The specified command will be executed through the shell.
         return output_path
 
     def _filter_rrna(self):
@@ -982,7 +1087,7 @@ def check_file(file_path, extensions):
 def run_and_check(the_string, *args, **kwargs):
     s = subprocess.run(the_string, *args, **kwargs)
     if s.returncode != 0:
-       print(f"{Col.F}Error in the following subprocess:{os.linesep}{the_string}{os.linesep}{Col.E}")
+        print(f"{Col.F}Error in the following subprocess:{os.linesep}{the_string}{os.linesep}{Col.E}")
 
 
 if __name__ == '__main__':
