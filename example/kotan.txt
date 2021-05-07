@@ -1,0 +1,46 @@
+>>> WT_IP1
+single
+/home/kai/KEMALINECIK/BukauData/IK_data/WT_54IP1_S1_R1_001.fastq.gz
+
+>>> WT_IP2
+single
+/home/kai/KEMALINECIK/BukauData/IK_data/WT_54IP2_S3_R1_001.fastq.gz
+
+>>> WT_Tot1
+single
+/home/kai/KEMALINECIK/BukauData/IK_data/WT_Tot1_S2_R1_001.fastq.gz
+
+>>> WT_Tot2
+single
+/home/kai/KEMALINECIK/BukauData/IK_data/WT_Tot2_S4_R1_001.fastq.gz
+
+>>> WT_IP1
+single
+/home/kai/KEMALINECIK/SequencingProcess/Output/IlgınsRun/WT_IP1/02_Cleanup/Read1_norRNA.fastq
+processes=4,5
+
+>>> WT_IP2
+single
+/home/kai/KEMALINECIK/SequencingProcess/Output/IlgınsRun/WT_IP2/02_Cleanup/Read1_norRNA.fastq
+processes=4,5
+
+>>> WT_Tot1
+single
+/home/kai/KEMALINECIK/SequencingProcess/Output/IlgınsRun/WT_Tot1/02_Cleanup/Read1_norRNA.fastq
+processes=4,5
+
+>>> WT_Tot2
+single
+/home/kai/KEMALINECIK/SequencingProcess/Output/IlgınsRun/WT_Tot1/02_Cleanup/Read1_norRNA.fastq
+processes=4,5
+
+>>> WT_IP1_withoutUMIextraction
+single
+/home/kai/KEMALINECIK/BukauData/IK_data/WT_54IP1_S1_R1_001.fastq.gz
+pattern_umi=None
+
+>>> WT_IP2_withoutUMIextraction
+single
+/home/kai/KEMALINECIK/BukauData/IK_data/WT_54IP2_S3_R1_001.fastq.gz
+pattern_umi=None
+
