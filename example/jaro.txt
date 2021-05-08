@@ -1,0 +1,33 @@
+>>> noCL_total
+single
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS23_S14_R1_001.fastq.gz
+
+>>> noCL_Monosome
+single
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS26_S17_R1_001.fastq.gz
+
+>>> noCL_Disome
+single
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS27_S18_R1_001.fastq.gz
+
+>>> noCL_60mer
+paired_linking
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS34_S9_R1_001.fastq.gz
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS34_S9_R2_001.fastq.gz
+
+>>> DSP_total
+single
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS28_S19_R1_001.fastq.gz
+
+>>> DSP_Monosome
+single
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS31_S22_R1_001.fastq.gz
+
+>>> DSP_Disome
+single
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS32.fastq.gz
+
+>>> DSP_60mer
+paired_linking
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS36_S10_R1_001.fastq.gz
+/home/kai/HDD_Kemal/BukauData/Jaro_BL21_60mers/JS36_S10_R2_001.fastq.gz

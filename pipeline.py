@@ -63,12 +63,12 @@ def argument_parser() -> argparse.Namespace:
     parser.add_argument("-a", type=str, dest="organism",
                         help="organism of interest for the analysis. If skipped, the default value is homo_sapiens.",
                         required=False, default="homo_sapiens",
-                        choices=["homo_sapiens", "mus_musculus", "saccharomyces_cerevisiae"],  # todo
+                        choices=["homo_sapiens", "mus_musculus", "saccharomyces_cerevisiae", "escherichia_coli"],
                         )
 
     parser.add_argument("-e", type=int, dest="ensembl_release",
                         help="ensembl version to be used. Ignored if the 'organism' does not necessitates Ensembl "
-                             "release information. Default value is 102.",
+                             "release information. Default value is 102. For E. coli, it must be 48.",
                         required=False, default=102)
 
     parser.add_argument("-c", type=int, dest="cpu",
@@ -106,7 +106,7 @@ class JobList:
                    3: "03_LinkingPairs",
                    4: "04_GenomeAlignment",
                    5: "05_JuliaAssignment"}
-    # Default values are based on the data partly published on Matilde et. al 2021.
+    # Default values are based on the data published on Matilde et. al 2021.
     # Adapter sequences
     default_adapter_single = "ATCGTAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
     default_adapter1_paired = "ATCGTAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
@@ -140,8 +140,9 @@ class JobList:
         """
         result = dict()  # Create a dictionary to populate with jobs
         with open(file_path, "r") as handle:  # Open the file in read only mode.
-            # Read all the data in the file. Split the content first with '>>>' to separate out the jobs.
-            content = f"{os.linesep}".join([line.strip() for line in handle if not line.startswith('#')])  # Skip comments
+            # Read all the data in the file. Split the content first with '>>>' to separate out the jobs. Skip comments
+            content = f"{os.linesep}".join([line.strip() for line in handle if not line.startswith('#')])
+
             for entry in [r.strip() for r in content.split(">>>") if r.strip()]:  # For each job
                 # Separate out the lines in a given job by new line character.
                 # If it starts with '#' just ignore this line
@@ -868,7 +869,7 @@ class Controller:
             temp_gtf_fasta = self.org_db.get_db("gtf")
 
             # Calculate genomeSAindexNbases
-            genome_size = sum([len(rec.seq) for rec in SeqIO.parse(temp_dna_fasta,"fasta")])
+            genome_size = sum([len(rec.seq) for rec in SeqIO.parse(temp_dna_fasta, "fasta")])
             sa_index_parameter = min(14, math.floor(math.log(genome_size, 2) / 2 - 1))
             # For small genomes, this paramter has to be scaled down.
             run_and_check((
@@ -906,20 +907,26 @@ class Controller:
 
 class OrganismDatabase:
 
-    ID_MAP = {"homo_sapiens": 9606, "mus_musculus": 10090, "saccharomyces_cerevisiae": 4932}  # todo
+    ID_MAP = {"homo_sapiens": 9606,
+              "mus_musculus": 10090,
+              "saccharomyces_cerevisiae": 4932,
+              "escherichia_coli": 562}
 
     def __init__(self, organism, ensembl_release, temp_repo_dir):
-        assert organism in ["homo_sapiens", "mus_musculus", "saccharomyces_cerevisiae"]  # todo
-        # todo: also add "homo_sapiens_refseq"
-
+        assert organism in ["homo_sapiens", "mus_musculus", "saccharomyces_cerevisiae", "escherichia_coli"]
         self.ensembl_release = ensembl_release
         self.organism = organism
         self.organism_id = OrganismDatabase.ID_MAP[self.organism]
         self.temp_repo_dir = temp_repo_dir
         self.repository = create_dir(self.temp_repo_dir, self.organism)
 
-        base_temp = f"ftp://ftp.ensembl.org/pub/release-{ensembl_release}"
-        
+        if self.organism != "escherichia_coli":
+            assert 90 <= self.ensembl_release <= 104, "Ensembl Release must be between 90 and 104."
+            base_temp = f"ftp://ftp.ensembl.org/pub/release-{ensembl_release}"
+        else:
+            assert self.ensembl_release == 48, "Ensembl Release must be '48' for escherichia_coli."
+            base_temp = f"ftp://ftp.ensemblgenomes.org/pub/release-{ensembl_release}/bacteria"
+
         if self.organism == "homo_sapiens":
             # Genome GTF
             gtf_temp = f"gtf/homo_sapiens/Homo_sapiens.GRCh38.{self.ensembl_release}.chr_patch_hapl_scaff.gtf.gz"
@@ -936,6 +943,10 @@ class OrganismDatabase:
             # Protein Fasta
             pep_temp = "fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz"
             self.pep = os.path.join(base_temp, pep_temp)
+            # Gerp Conservation score
+            gerp_temp = "compara/conservation_scores/111_mammals.gerp_conservation_score/" \
+                        "gerp_conservation_scores.homo_sapiens.GRCh38.bw"
+            self.gerp = os.path.join(base_temp, gerp_temp)
         
         elif self.organism == "mus_musculus":
             # Genome GTF
@@ -953,6 +964,10 @@ class OrganismDatabase:
             # Protein Fasta
             pep_temp = "fasta/mus_musculus/pep/Mus_musculus.GRCm38.pep.all.fa.gz"
             self.pep = os.path.join(base_temp, pep_temp)
+            # Gerp Conservation score
+            gerp_temp = "compara/conservation_scores/111_mammals.gerp_conservation_score/" \
+                        "gerp_conservation_scores.mus_musculus.GRCm38.bw"
+            self.gerp = os.path.join(base_temp, gerp_temp)
 
         elif self.organism == "saccharomyces_cerevisiae":
             # Genome GTF
@@ -963,13 +978,37 @@ class OrganismDatabase:
             self.gff3 = os.path.join(base_temp, gff3_temp)
             # Genome DNA fasta
             dna_temp = "fasta/saccharomyces_cerevisiae/dna/Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa.gz" 
-            # If the primary assembly file is not present, that indicates that there are no haplotype/patch regions, and the 'toplevel' file is equivalent
+            # Note: If the primary assembly file is not present, that indicates there are no haplotype or patch
+            # regions, and the 'toplevel' file is equivalent
             self.dna = os.path.join(base_temp, dna_temp)
             # Transcriptome DNA fasta
             cdna_temp = "fasta/saccharomyces_cerevisiae/cdna/Saccharomyces_cerevisiae.R64-1-1.cdna.all.fa.gz"
             self.cdna = os.path.join(base_temp, cdna_temp)
             # Protein Fasta
             pep_temp = "fasta/saccharomyces_cerevisiae/pep/Saccharomyces_cerevisiae.R64-1-1.pep.all.fa.gz"
+            self.pep = os.path.join(base_temp, pep_temp)
+
+        elif self.organism == "escherichia_coli":
+            # Genome GTF
+            gtf_temp = "gtf/bacteria_15_collection/escherichia_coli_bl21_de3_gca_000022665/" \
+                       "Escherichia_coli_bl21_de3_gca_000022665.ASM2266v1.48.gtf.gz"
+            self.gtf = os.path.join(base_temp, gtf_temp)
+            # Genome GFF3
+            gff3_temp = "gff3/bacteria_15_collection/escherichia_coli_bl21_de3_gca_000022665/" \
+                        "Escherichia_coli_bl21_de3_gca_000022665.ASM2266v1.46.gff3.gz"
+            self.gff3 = os.path.join(base_temp, gff3_temp)
+            # Genome DNA fasta
+            dna_temp = "fasta/bacteria_15_collection/escherichia_coli_bl21_de3_gca_000022665/dna/" \
+                       "Escherichia_coli_bl21_de3_gca_000022665.ASM2266v1.dna.nonchromosomal.fa.gz"
+            # Note: Nonchromosomal contains DNA that has not been assigned a chromosome
+            self.dna = os.path.join(base_temp, dna_temp)
+            # Transcriptome DNA fasta
+            cdna_temp = "fasta/bacteria_15_collection/escherichia_coli_bl21_de3_gca_000022665/cdna/" \
+                        "Escherichia_coli_bl21_de3_gca_000022665.ASM2266v1.cdna.all.fa.gz"
+            self.cdna = os.path.join(base_temp, cdna_temp)
+            # Protein Fasta
+            pep_temp = "fasta/bacteria_15_collection/escherichia_coli_bl21_de3_gca_000022665/pep/" \
+                       "Escherichia_coli_bl21_de3_gca_000022665.ASM2266v1.pep.all.fa.gz"
             self.pep = os.path.join(base_temp, pep_temp)
 
         rrna_base_temp = "ftp://ftp.ebi.ac.uk/pub/databases/RNAcentral/current_release"
@@ -983,12 +1022,19 @@ class OrganismDatabase:
         output_path_compressed = os.path.join(self.repository, os.path.basename(db_url))
         output_path_uncompressed = os.path.splitext(output_path_compressed)[0]
         if not os.access(output_path_uncompressed, os.R_OK) or not os.path.isfile(output_path_uncompressed):
-            print(f"Downloading from the server for {db}:{os.linesep}{db_url}")
             if not os.access(output_path_compressed, os.R_OK) or not os.path.isfile(output_path_compressed):
+                print(f"Downloading from the server for {db}:{os.linesep}{db_url}")
                 run_and_check(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
             subprocess.run(f"cd {self.repository}; gzip -d -q {output_path_compressed}", shell=True)
-            # The specified commands will be executed through the shell.
         return output_path_uncompressed
+
+    def get_uncompressed_db(self, db):
+        db_url = eval(f"self.{db}")
+        output_path = os.path.join(self.repository, os.path.basename(db_url))
+        if not os.access(output_path, os.R_OK) or not os.path.isfile(output_path):
+            print(f"Downloading from the server for {db}:{os.linesep}{db_url}")
+            run_and_check(f"cd {self.repository}; curl -L -O --silent {db_url}", shell=True)
+        return output_path
 
     def _download_rna_central(self, db_url):
         output_path = os.path.join(self.repository, os.path.basename(db_url))
