@@ -4,6 +4,8 @@
 # It is basically what 'umi_tools extract' outputs!
 # Line 166 and line 727 are changed! 
 
+# Line 405: "Name" changed to "gene_id"
+
 Base.CoreLogging.disable_logging(Base.CoreLogging.Debug)
 
 using BioAlignments
@@ -402,7 +404,7 @@ function parseGFF3(infile::AbstractString)
             att = Dict(GFF3.attributes(record))
             id = haskey(att, "ID") ? att["ID"][1] : att["Name"][1]
             chrom = GFF3.seqid(record)
-            gene = Gene(att["Name"][1], id, chrom)
+            gene = Gene(att["gene_id"][1], id, chrom)
             for k ∈ keys(GeneAttributes)
                     if haskey(att, k)
                         gene.attributes[k] = att[k][1]
