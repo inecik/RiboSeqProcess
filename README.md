@@ -43,3 +43,31 @@ python3 /home/kai/HDD_Kemal/from_raf_computer/Kemal/RiboSeqProcess/pipeline.py -
 ```
 
 Example task list file can be found under `example` folder of this repository.
+
+### Task list specifications
+
+- It must be a `.txt` document.
+- If a line starts with `#` character, it will be interpreted as comments and disregarded. Empty lines are also ignored.
+- Sequencing files must be with `.fastq.gz` extension.
+- All file paths have to be absolute
+- A task should start with `>>>` followed by a string (without spaces) which indicates the name of the sample.
+- Second line should be one of the followings: 
+  -"single" for single end sequencing
+  -"paired" for paired end sequencing
+  -"paired_linking" for paired end sequencing but also activates link pairing module.
+- Composition of next lines depends on sequencing type.
+  -"single"
+    - File path for fastq file.
+    - Specific settings: 
+      - "adapter": Adapter sequence
+      - "pattern_umi": Regex code for UMI extraction.
+  -"paired" or "paired_linking"
+    - File path for fastq file for read 1 (forward).
+    - File path for fastq file for read 2 (reverse).
+    - Specific settings:
+      - "adapter1": Adapter sequence for read 1
+      - "adapter2": Adapter sequence for read 2
+      - "pattern_umi1": Regex code for UMI extraction for read 1
+      - "pattern_umi2": Regex code for UMI extraction for read 2
+- About Specific settings: Order does not matter. If these are omitted, then the default values will be accepted. Key and value should be separated by `=` character. For example, `adapter=ATATATACG`. Note that `None` should be written in order to omit such a settings; for example, if you do not want to cut anything, then `adapter=None`. 
+ - Please see example task lists under `example` folder.   
