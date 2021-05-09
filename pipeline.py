@@ -51,7 +51,7 @@ def argument_parser() -> argparse.Namespace:
     """
 
     parser = argparse.ArgumentParser(prog="pipeline.py",  # Name of the program
-                                     description="The app description.")  # todo
+                                     description="Deep sequencing data processing pipeline.")  # todo
 
     # Introduce arguments, they are already self explanatory.
     parser.add_argument("-r", type=str, dest="identifier",
