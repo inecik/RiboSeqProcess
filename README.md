@@ -1,4 +1,4 @@
-# RiboSeqAnalysis
+# RiboSeqProcess
 
 Deep sequencing data processing pipeline. 
 
