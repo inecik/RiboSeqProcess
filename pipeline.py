@@ -106,19 +106,24 @@ class JobList:
                    3: "03_LinkingPairs",
                    4: "04_GenomeAlignment",
                    5: "05_JuliaAssignment"}
+    
     # Default values are based on the data published on Matilde et. al 2021.
+    
     # Adapter sequences
     default_adapter_single = "ATCGTAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
     default_adapter1_paired = "ATCGTAGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
     default_adapter2_paired = None  # None, if no adapter trimming is required.
+    
     # UMI patterns, the below patterns are regex strings.
     default_pattern_single = "^(?P<umi_1>.{2}).*(?P<umi_2>.{5})$"
     default_pattern1_paired = "^(?P<umi_1>.{2}).*"
     default_pattern2_paired = "^(?P<discard_2>.{5})(?P<umi_2>.{5}).*"
+    
     # Default processing steps, the numbers corresponds to the steps of process_map dictionary above.
     default_processes_single = [1, 2, 4, 5]
     default_processes_paired_linking = [1, 2, 3, 4, 5]
     default_processes_paired = [1, 2, 4]
+    
     # For now, the only valid input for raw processing files are fastq.gz. Other file formats were not tested.
     proper_input_extensions = ["fastq.gz"]
 
@@ -286,11 +291,15 @@ class Controller:
 
     def __init__(self, run_identifier: str, organism: str, ensembl_release: int, cpu_cores: int,
                  temp_repo_dir: str, data_repo_dir: str, assign_from: int, jobs: dict):
+        
         # First check if the directories for temp and output, make sure they exist and writable.
         check_directory([temp_repo_dir, data_repo_dir])
+        
         # Make sure the below third party packages are installed.
         # Systems samtools will be used because the conda distribution raises some errors.
         check_exist_package(["cutadapt", "umi_tools", "bowtie2-build", "STAR", "bowtie2", "/usr/bin/samtools"])
+        # TODO: Versioning information will be also checked.
+
         # Assign the parameters as object variables
         self.temp_repo_dir = temp_repo_dir
         self.data_repo_dir = data_repo_dir
@@ -300,20 +309,26 @@ class Controller:
         self.run_identifier = run_identifier
         self.cpu = cpu_cores
         self.assign_from = assign_from
+        
         # Make sure julia assignment script is in the same directory with this script.
         self.julia_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "julia_assignment.jl")
         assert check_file(self.julia_path, [".jl"]), f"JuliaAssignment script could not be found.{os.linesep}:" \
                                                      f"{self.julia_path}"
+        
         # Create an OrganismDatabase object with designated parameters.
         self.org_db = OrganismDatabase(self.organism, self.ensembl_release, self.temp_repo_dir)
+        
         # Call the method to create the folders under data_repo_dir to save the final and intermediate results.
         self.create_output_tree()
+        
         # Call the method to create index files for genome, rRNA and transcriptome alignments. Note that only
         # pair_linking uses transcriptome indexes but this will be created anyway.
         self.index_directories = self.create_index()
 
     def is_already_calculated(self):
-        pass  # todo
+        pass  # Not implemented yet! 
+        # The function decides whether a process for current settings and for the same fastq file was already carried 
+        # out in the past. If so, just skip the process and move on.
 
     def start_processing(self):
         """
@@ -327,6 +342,8 @@ class Controller:
         self.julia_assignment()
         # Also save the Controller object as a joblib file, to be able to see running parameters in the future.
         joblib.dump(self, os.path.join(self.data_repo_dir, self.run_identifier, "pipeline_controller.joblib"))
+        # TODO: Save the pipeline.py and julia script into the output folder.
+        # TODO: Fastqc fastq analysis tool should be implemented here.
 
     def julia_assignment(self):
         """
@@ -339,31 +356,42 @@ class Controller:
                 self.julia_assignment_one_job(job_id, gff_path)  # Run the processing for this job.
         # The last step of the pipeline, no output path is returned.
 
-    def julia_assignment_one_job(self, job_id, gff_path):
+    def julia_assignment_one_job(self, job_id: str, gff_path: str):
         """
-
-        :param job_id:
-        :param gff_path:
-        :return:
+        Runs the Ilia's Julia assignment script with proper settings.
+        :param job_id: The job id, which exist in the self.jobs dictionary.
+        :param gff_path: Absolute path of corrected GFF file.
+        :return: None
         """
-        jobbing = self.jobs[job_id]
-        job_dir = jobbing["processes_dirs"][5]  # 5'i açıkla
-        input_sam = self.jobs[job_id]["process_genome_alignment"]
-        assert JobList.process_map[5].endswith("JuliaAssignment")
+        jobbing = self.jobs[job_id]  # Get the job from the dictionary containing all other jobs.
+        job_dir = jobbing["processes_dirs"][5]  # Directory for Julia script [5] outputs.
+        input_sam = self.jobs[job_id]["process_genome_alignment"]  # Get the SAM file to be used for the assignment
+        assert JobList.process_map[5].endswith("JuliaAssignment")  # Make sure '5' is for JuliaAssignment process.
 
-        run_and_check((
-            f"cd {job_dir}; "  # Change the directory to the directory
-            f"{shutil.which('julia')} {self.julia_path} "  # Which Julia installation to use and the script
-            f"-g {gff_path} "  # Gff3 file. Removed of duplicated gene names
-            f"-a {self.assign_from} "  # Assignment from 3'
+        run_and_check((  # Execute the following string through the shell.
+            f"cd {job_dir}; "  # Change the directory to the directory of JuliaAssignment
+            f"{shutil.which('julia')} {self.julia_path} "  # Which Julia installation and the script to use
+            f"-g {gff_path} "  # Gff3 file. Removed of duplicated gene names by a function in this pipeline.
+            f"-a {self.assign_from} "  # Assignment from 3' or 5', which is an input for this program.
             # "-u "  # Inherited from Matilde et al 2021. Removed here because umi-tool deduplication was already done.
-            f"-o {job_dir} {input_sam}"  # Output file & Input file
-        ), shell=True)  # The specified command will be executed through the shell.
+            f"-o {job_dir} {input_sam}"  # Designate output file & input file
+        ), shell=True)
         # The last step of the pipeline, no output path is returned.
 
-    def julia_assignment_gff3_correct(self):
-        gff_path = self.org_db.get_db("gff3")
-        output_path = os.path.splitext(gff_path)[0] + "_renamed_duplicate_gene_names.gff3"
+    def julia_assignment_gff3_correct(self) -> str:
+        """
+        For GFF3 file to work by the Ilia's tool, it is a must to have un-duplicated gene names. If you have duplicated
+        lines of the gene names, then the assignment tool of Ilia's will raise an error. The reason for duplicate gene 
+        name is related to how this annotation sources operates. Some annotation source, for example ensembl, uses the 
+        gene id as the identifier for each gene. So there is no duplicated gene id in ensembl. However, in rare cases, a
+        gene name is attributed to more than one gene id. As a result, you have more than one gene name in GFF3 file. As
+        far as I could test, the genes names are not duplicated in refseq annotation. Since the Ilia's tool was based on 
+        refseq annotation, it does not raise any error. In short, this function basically renames the gene names 
+        which is duplicated several times in the GFF3 file.
+        :return: Absolute path of the corrected GFF3 file.
+        """
+        gff_path = self.org_db.get_db("gff3")  # Get the path of input, raw GFF3 file.
+        output_path = os.path.splitext(gff_path)[0] + "_renamed_duplicate_gene_names.gff3"  # The final file name 
 
         try:
 
