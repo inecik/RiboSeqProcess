@@ -10,7 +10,7 @@ User provides these four inputs to the package. Then, the package starts running
 
 ### Workflow
 
-![Workflow](workflow.pdf?raw=true "Title")
+![Workflow](workflow.pdf)
 
 ### Usage
 
