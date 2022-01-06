@@ -10,7 +10,7 @@ User provides these four inputs to the package. Then, the package starts running
 
 ### Workflow
 
-![workflow](https://github.com/kemalinecik/RiboSeqProcess/blob/master/workflow.png?raw=true)
+![workflow](workflow.png?raw=true)
 
 ### Usage
 
