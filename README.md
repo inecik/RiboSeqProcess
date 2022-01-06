@@ -10,7 +10,7 @@ User provides these four inputs to the package. Then, the package starts running
 
 ### Workflow
 
-<embed src="workflow.pdf" type="application/pdf">
+![workflow](workflow.png?raw=true)
 
 ### Usage
 
