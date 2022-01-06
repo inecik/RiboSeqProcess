@@ -1,6 +1,16 @@
-# RiboSeqProcess
+# Ribosome Profiling Data Processing Package
 
-Deep sequencing data processing pipeline. 
+User provides these four inputs to the package. Then, the package starts running all necessary operations and modules. The package is composed of three main layers. accessory operations, actual pipeline steps, and input-output files. This one-click program accepts many raw FASTQ files at the same time. Auto-downloading all databases makes the analysis easy, reproducible, and up-to-date. Hyperparameters of each pipeline steps are optimized by randomized grid-search to get best quality results. This pipeline automates and standardizes analysis procedures. Some lab members have already started using this pipeline.
+
+- Auto-downloading all necessary databases. 
+- Easy and reproducible analysis.
+- Optimized hyperparameters.
+- Automates and standardizes analysis procedures.
+- Robust, rapid analysis for everyone.
+
+### Workflow
+
+![Workflow](workflow.pdf?raw=true "Title")
 
 ### Usage
 
